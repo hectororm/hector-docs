@@ -1,18 +1,20 @@
 ```index
 breadcrumb: Relationships
-summary-order: 4
+summary-order: 5
 ```
 
 # Relationships
 
 ## Declaration with PHP attributes
 
-4 attributes are available to define relationships:
+4 attributes are available to define relationships.
 
-- `Hector\Orm\Attributes\HasOne` To define a relation many-to-one or one-to-one
-- `Hector\Orm\Attributes\HasMany` To define a relation one-to-many
-- `Hector\Orm\Attributes\BelongsToMany` To define a relation many-to-many
-- `Hector\Orm\Attributes\BelongsTo` To inverse a relation already declared in target
+| Attribute                             | Description                                      |
+|---------------------------------------|--------------------------------------------------|
+| `Hector\Orm\Attributes\HasOne`        | To define a relation many-to-one or one-to-one   |
+| `Hector\Orm\Attributes\HasMany`       | To define a relation one-to-many                 |
+| `Hector\Orm\Attributes\BelongsToMany` | To define a relation many-to-many                |
+| `Hector\Orm\Attributes\BelongsTo`     | To inverse a relation already declared in target |
 
 Example:
 
@@ -27,13 +29,72 @@ class Foo extends MagicEntity {
 }
 
 #[Orm\BelongsTo(Foo::class, 'foo')]
-class Bar {
+class Bar extends MagicEntity {
 }
 ```
 
 ## Usage
 
-TODO
+After declaration of relations on entities, the relations are accessibles with method `MyEntity::getRelated(): Related`.
+
+`Hector\Orm\Entity\Related` class have some interesting methods:
+
+- `Related::getBuilder('MY_RELATION_NAME'): Builder`: get builder to get relation(s)
+- `Related::get('MY_RELATION_NAME'): Collection|Entity|null`: get final value
+- `Related::exists('MY_RELATION_NAME'): bool`: known if relation name exists
+
+### Magic entity
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\HasOne(Bar::class, 'bar')]
+#[Orm\HasMany(Baz::class, 'baz')]
+class Foo extends MagicEntity {
+}
+```
+
+```php
+$entity = Foo::get();
+$entity->bar; // Return entity of type `Bar`
+$entity->baz; // Return entity of type `Collection<Bar>`
+$entity->getRelated()->get('baz'); // Same as `$entity->baz`
+```
+
+### Classic entity
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Collection\Collection;
+use Hector\Orm\Entity\Entity;
+
+#[Orm\HasOne(Bar::class, 'bar')]
+#[Orm\HasMany(Baz::class, 'baz')]
+class Foo extends Entity {
+    public function getBar(): ?Bar
+    {
+        return $this->getRelated()->get('bar');
+    }
+
+    public function getBar(): Collection
+    {
+        return $this->getRelated()->get('baz');
+    }
+
+    public function getFirstBar(): ?Baz
+    {
+        return $this->getRelated()->getBuilder('baz')->get();
+    }
+}
+```
+
+```php
+$entity = Foo::get();
+$entity->getBar(); // Return entity of type `Bar`
+$entity->getBaz(); // Return entity of type `Collection<Bar>`
+$entity->getRelated()->get('baz'); // Same as `$entity->getBaz()`
+```
 
 ## Type of relations
 

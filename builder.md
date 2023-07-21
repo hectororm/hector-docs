@@ -42,7 +42,7 @@ exception `Hector\Orm\Exception\NotFoundException` is thrown.
 
 ```php
 try {
-    $entity = MyEntity::find(1);
+    $entity = MyEntity::findOrFail(1);
 } catch (Hector\Orm\Exception\NotFoundException $exception) {
     // ... Do something
 }
