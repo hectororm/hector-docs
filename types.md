@@ -28,7 +28,7 @@ All default types are in namespace: `Hector\DataTypes\Type`.
 | `JsonType`     | JSON string from database to PHP array/stdClass | `bool $associative = true` to convert to associative array or `stdClass`                                                           |
 | `NumericType`  | Numeric from database to PHP numeric int/float  | `string $type = 'int'` PHP type expected                                                                                           |
 | `SetType`      | Set of value from database to PHP array         | *None*                                                                                                                             |
-| `StringType`   | Data from database to PHP string                | *None*                                                                                                                             |
+| `StringType`   | Data from database to PHP string                | `?int $maxlength = null` maxlength of column ; `?string $encoding = null` encoding of column for truncate                          |
 
 Example:
 
