@@ -127,6 +127,20 @@ $collection = MyEntity::query()->chunk(
 );
 ```
 
+A third boolean parameter "lazy" allows you to deactivate lazy mode.
+
+```php
+use Hector\Orm\Collection\Collection;
+
+$collection = MyEntity::query()->chunk(
+    100,
+    function(Collection $collection) {
+        // ...
+    },
+    lazy: false
+);
+```
+
 ### Yield
 
 You can retrieve entities with a [Generator](https://www.php.net/manual/class.generator.php).
