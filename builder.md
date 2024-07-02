@@ -1,7 +1,8 @@
-```index
-breadcrumb: Builder
+---
+breadcrumb:
+  - Builder
 summary-order: 3
-```
+---
 
 # Builder
 

@@ -1,7 +1,8 @@
-```index
-breadcrumb: Entities
+---
+breadcrumb:
+  - Entities
 summary-order: 2
-```
+---
 
 # Entities
 

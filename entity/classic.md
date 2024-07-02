@@ -1,7 +1,9 @@
-```index
-breadcrumb: Entities; Classic entity
+---
+breadcrumb:
+  - Entities
+  - Classic entity
 summary-order: ;2
-```
+---
 
 # Classic entity
 

@@ -1,7 +1,9 @@
-```index
-breadcrumb: Entities; Magic entity
+---
+breadcrumb:
+  - Entities
+  - Magic entity
 summary-order: ;1
-```
+---
 
 # Magic entity
 

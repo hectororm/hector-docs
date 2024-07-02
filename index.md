@@ -1,7 +1,8 @@
-```index
-breadcrumb: Getting started
+---
+breadcrumb:
+   - Getting started
 summary-order: 1
-```
+---
 
 # Getting started
 

@@ -1,7 +1,8 @@
-```index
-breadcrumb: Relationships
+---
+breadcrumb:
+  - Relationships
 summary-order: 5
-```
+---
 
 # Relationships
 

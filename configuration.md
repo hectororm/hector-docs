@@ -1,3 +1,10 @@
+---
+breadcrumb:
+   - Getting started
+   - Advanced configuration
+summary-order: 1
+---
+
 # Advanced configuration
 
 ## Specify the table or schema name

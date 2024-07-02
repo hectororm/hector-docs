@@ -1,7 +1,9 @@
-```index
-breadcrumb: Entities; Collection
+---
+breadcrumb:
+  - Entities
+  - Collection
 summary-order: ;3
-```
+---
 
 # Collection
 

@@ -1,7 +1,8 @@
-```index
-breadcrumb: Data types
+---
+breadcrumb:
+  - Data types
 summary-order: 4
-```
+---
 
 # Data types
 

@@ -1,3 +1,10 @@
+---
+breadcrumb:
+   - Getting started
+   - Cache
+summary-order: 2
+---
+
 # Cache
 
 The internal cache strategy of **Hector ORM** is to keep in cache system:
