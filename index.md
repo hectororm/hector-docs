@@ -1,76 +1,85 @@
 ---
 breadcrumb:
-   - Getting started
+- Getting started
 summary-order: 1
 ---
 
-# Getting started
+# Getting Started 🚀
 
 ## Introduction
 
-**Hector ORM** is a PHP ORM independent of any framework and inspired by others ORM functionalities.
+**Hector ORM** is a lightweight, framework-agnostic PHP ORM — designed to be modular, fast, and expressive. It draws inspiration from existing ORM concepts, while promoting freedom of structure and strong typing.
 
-### ORM definition
+### What is an ORM?
 
-> Object-relational mapping (ORM, O/RM, and O/R mapping tool!) in computer science is a programming technique for converting data between incompatible type systems using object-oriented programming languages. This creates, in effect, a "virtual object database" that can be used from within the programming language. There are both free and commercial packages available that perform object-relational mapping, although some programmers opt to construct their own ORM tools.
-> 
-> Source: [Wikipedia](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping)
+> Object-relational mapping (ORM, O/RM, and O/R mapping tool!) in computer science is a programming technique for converting data between incompatible type systems using object-oriented programming languages. This creates, in effect, a "virtual object database" that can be used from within the programming language.
+>
+> — [Wikipedia](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping)
 
-### Ways
+### Choose Your Style ✨
 
-2 ways to manage entities:
+You can manage entities in multiple ways:
 
-- [Classic entity](./entity/classic.md): you need to declare properties on your entities, and **Hector ORM** based on to do relation with DBMS 
-- [Magic entities](./entity/magic.md): all is managed by **Hector ORM** and uses magic properties of PHP
+* [Classic entities](./orm/entity.md): define PHP properties explicitly and **Hector ORM** handles mapping.
+* [Magic entities](./orm/entity.md): rely on **Hector ORM** dynamic behavior using PHP’s magic methods.
+* Roll your own 🧪: create a custom Mapper if you want total control over mapping logic.
 
-Another way is possible, it's your way, create yourself Mapper to imagine your entity management.
+## Quick Start
 
+### 1. Installation 📦
 
-## Quick start
-
-### Installation
-
-Installation of ORM is easy with [Composer](https://getcomposer.org/):
+Install with [Composer](https://getcomposer.org/):
 
 ```bash
-composer install hectororm/orm
+composer require hectororm/hectororm
 ```
 
-### Usage
+### 2. Create a Database Connection
 
-1. Create connection
-   
-   ```php
-   $connection = new Hector\Connection\Connection('dsn');
-   ```
+```php
+use Hector\Connection\Connection;
 
-2. Create ORM object
+$connection = new Connection('mysql:host=localhost;dbname=test', 'user', 'pass');
+```
 
-   ```php
-   $orm = Hector\Orm\OrmFactory::orm(['schemas' => 'my-schema'], $connection);
-   ```
+### 3. Boot the ORM
 
-3. Creates your entities
-   
-   ```php
-   use Hector\Orm\Attributes as Orm;
-   use Hector\Orm\Entity\MagicEntity;
-   
-   #[Orm\HasOne(Bar::class, 'bar')]
-   class Foo extends MagicEntity {
-   }
-   
-   #[Orm\BelongsTo(Foo::class, 'foo')]
-   class Bar {
-   }
-   ```
+```php
+use Hector\Orm\OrmFactory;
 
-4. Uses your entities
-   
-   ```php
-   $entity = Foo::findOrFail(1);
-   $foreignEntity = $entity->bar;
-   
-   print $foreignEntity->field;
-   ```
+$orm = OrmFactory::orm([
+    'schemas' => ['my-schema']
+], $connection);
+```
 
+### 4. Define Entities 🧱
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\HasOne(Bar::class, 'bar')]
+class Foo extends MagicEntity {}
+
+#[Orm\BelongsTo(Foo::class, 'foo')]
+class Bar {}
+```
+
+### 5. Use the ORM 💡
+
+```php
+$foo = Foo::findOrFail(1); // find a Foo entity by primary key
+$bar = $foo->bar; // access related Bar entity
+
+echo $bar->field; // access a field from the related Bar
+```
+
+---
+
+You're now ready to build with **Hector ORM**. Keep exploring:
+
+* [Entity definition](./orm/entity.md)
+* [Working with relationships](./orm/relationships.md)
+* [Advanced configuration](./orm/configuration.md)
+
+Happy mapping 🗺️
