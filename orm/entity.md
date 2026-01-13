@@ -93,17 +93,24 @@ echo $user->firstname; // Outputs "Alice"
 
 ### Creating and Saving
 
+To persist a new entity in the database, instantiate it, set its properties, and call the `save()` method:
+
 ```php
-// Create a new entity
 $user = new User();
 $user->firstname = 'Alice';
 $user->lastname = 'Dupont';
 $user->email = 'alice@example.com';
 
-// Save to database
 $user->save();
+```
 
-// Save with cascade (saves related entities too)
+#### Cascade Save
+
+> 🆕 **Info**: *Since version 1.1*
+
+When your entity has relationships, you can persist them all at once using the `cascade` parameter. This will automatically save any related entities that have been modified or created:
+
+```php
 $user->save(cascade: true);
 ```
 
@@ -142,7 +149,7 @@ $user->refresh(); // Reloads original data from DB
 
 ### Bulk Operations on Collections
 
-Collections returned by the ORM support bulk operations:
+Collections returned by the ORM support bulk operations, allowing you to apply actions to multiple entities at once:
 
 ```php
 $users = User::query()->where('active', false)->all();
@@ -150,14 +157,21 @@ $users = User::query()->where('active', false)->all();
 // Save all entities in collection
 $users->save();
 
-// Save with cascade
-$users->save(cascade: true);
-
 // Delete all entities in collection
 $users->delete();
 
-// Refresh all entities
+// Refresh all entities from database
 $users->refresh();
+```
+
+#### Cascade Save on Collections
+
+> 🆕 **Info**: *Since version 1.1*
+
+Like individual entities, collections also support cascade saving. This is useful when you need to persist a batch of entities along with their relationships:
+
+```php
+$users->save(cascade: true);
 ```
 
 ---

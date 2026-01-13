@@ -391,6 +391,49 @@ Reduce to a single value.
 Collection::new([1, 2, 3])->reduce(fn($c, $i) => $c + $i, 10); // 16
 ```
 
+### `join(string $glue = '', ?string $finalGlue = null): string`
+
+> 🆕 **Info**: *Since version 1.2*
+
+Join collection items as a string.
+
+```php
+$collection = Collection::new(['foo', 'bar', 'baz']);
+$collection->join(', ');           // 'foo, bar, baz'
+$collection->join(', ', ' and ');  // 'foo, bar and baz'
+```
+
+Similar to `implode()` function.
+
+### `groupBy(string|int|Closure $groupBy): static`
+
+> 🆕 **Info**: *Since version 1.2*
+
+Group items by a key or callback result.
+
+```php
+$collection = Collection::new([
+    ['name' => 'Alice', 'role' => 'admin'],
+    ['name' => 'Bob', 'role' => 'user'],
+    ['name' => 'Charlie', 'role' => 'admin'],
+]);
+
+// Group by array key
+$collection->groupBy('role')->getArrayCopy();
+// [
+//     'admin' => [['name' => 'Alice', 'role' => 'admin'], ['name' => 'Charlie', 'role' => 'admin']],
+//     'user'  => [['name' => 'Bob', 'role' => 'user']],
+// ]
+
+// Group by callback
+$collection->groupBy(fn($item) => $item['name'][0])->getArrayCopy();
+// [
+//     'A' => [['name' => 'Alice', 'role' => 'admin']],
+//     'B' => [['name' => 'Bob', 'role' => 'user']],
+//     'C' => [['name' => 'Charlie', 'role' => 'admin']],
+// ]
+```
+
 ---
 
 ## 🔍 `Collection` Additional Methods
