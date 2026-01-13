@@ -93,6 +93,7 @@ Maps string or integer values from the database to backed PHP enums.
 | try  | Use `tryFrom()` instead of `from()` | No       | `false` |
 
 > 💡 **Tip**: Use `VARCHAR`, `TEXT`, or `INT` columns depending on your enum backing type
+
 > ⚠️ **Warning**: With `try = false`, invalid DB values will throw a `ValueError`
 
 #### Conversion
