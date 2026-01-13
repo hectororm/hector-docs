@@ -5,12 +5,12 @@ breadcrumb:
 summary-order: ;3
 ---
 
-# Builder
+# 🔧 Builder
 
 The `Builder` provides a high-level, entity-oriented way to perform queries on your data models. It is built on top of
 the lower-level `QueryBuilder` and integrates deeply with **Hector ORM** entity management.
 
-## Accessing the Builder
+## 🔍 Accessing the Builder
 
 You can access the builder using the static `Entity::query()` method, or instantiate it directly:
 
@@ -28,23 +28,27 @@ $builder = new Builder(MyEntity::class);
 > see [`hectororm/query`](https://github.com/hectororm/query) on GitHub
 > or [Packagist](https://packagist.org/packages/hectororm/query).
 
-## Finding Entities
+## 🎯 Finding Entities
 
 ### Find by Primary Key
 
 ```php
 $entity = MyEntity::find(1);
-$collection = MyEntity::find(1, 2);
 ```
 
-If the entity does not exist, `null` is returned.
+Returns the entity or `null` if not found.
+
+> ⚠️ **Warning**: Passing multiple IDs to `find()` is deprecated. Use `findAll()` instead for multiple entities.
+
+---
 
 ### Find All
 
-Returns a collection even for a single ID:
+Returns a collection of entities matching the given primary key(s):
 
 ```php
 $collection = MyEntity::findAll(1);
+$collection = MyEntity::findAll(1, 2, 3);
 ```
 
 ### Find or Fail
@@ -69,18 +73,29 @@ Returns existing entity or creates a new one with default values:
 $entity = MyEntity::findOrNew(1, ['foo' => 'value']);
 ```
 
-## Get by Offset (non-PK access)
+## 📊 Get by Offset (non-PK access)
+
+These methods retrieve entities by their position in the result set (zero-based offset), not by primary key. Useful when you need the Nth result of a query.
 
 ### Get / Get or Fail / Get or New
 
-Same behavior as `find*` methods, but works on offset instead of primary key:
-
 ```php
-$entity = MyEntity::get(1);
-$entity = MyEntity::getOrNew(1, ['foo' => 'value']);
+// Get first result (offset 0)
+$entity = MyEntity::query()->get();
+
+// Get third result (offset 2)
+$entity = MyEntity::query()->where('active', true)->get(2);
+
+// Throw NotFoundException if no result at offset
+$entity = MyEntity::query()->getOrFail(0);
+
+// Return new entity with default values if no result at offset
+$entity = MyEntity::query()->getOrNew(0, ['status' => 'draft']);
 ```
 
-## Retrieving All Entities
+---
+
+## 📋 Retrieving All Entities
 
 ```php
 $collection = MyEntity::all();
@@ -92,33 +107,39 @@ Also available via the builder:
 $collection = MyEntity::query()->all();
 ```
 
-## Chunking and Yielding
+## 🔄 Chunking and Yielding
 
 Use `chunk()` for memory-friendly batch processing:
 
 ```php
 MyEntity::query()->chunk(100, function (Collection $entities) {
-    // ...
+    foreach ($entities as $entity) {
+        // Process each entity
+    }
 });
 ```
 
-With lazy mode disabled:
+With lazy mode disabled (eager fetch per chunk):
 
 ```php
-MyEntity::query()->chunk(100, function ($collection) {
-    // ...
+MyEntity::query()->chunk(100, function (Collection $collection) {
+    // Each chunk is fetched eagerly from DB
 }, lazy: false);
 ```
 
-Use `yield()` to iterate using a generator:
+Use `yield()` to iterate using a lazy generator. Entities are hydrated one by one as you iterate, minimizing memory usage:
 
 ```php
 foreach (MyEntity::query()->yield() as $entity) {
-    // ...
+    // Each entity is loaded on-demand
 }
 ```
 
-## Counting
+> 💡 **Tip**: `yield()` returns a `LazyCollection`. The underlying query is executed once, but entities are hydrated lazily during iteration.
+
+---
+
+## 🔢 Counting
 
 ```php
 $count = MyEntity::query()->count();
@@ -126,13 +147,20 @@ $count = MyEntity::query()->count();
 
 This will ignore any `limit()` that was previously applied.
 
-## Limiting and Offsetting Results
+## 📦 Limiting and Offsetting Results
 
 ```php
 MyEntity::query()->limit(10)->offset(5)->all();
 ```
 
-## Conditions
+## 🔢 Ordering Results
+
+```php
+MyEntity::query()->orderBy('created_at', 'DESC')->all();
+MyEntity::query()->orderBy('name')->all(); // ASC by default
+```
+
+## 🧮 Conditions
 
 You can filter entities using a fluent API similar to the `QueryBuilder`.
 
@@ -174,12 +202,16 @@ MyEntity::query()->whereNotExists($subQuery);
 
 ```php
 MyEntity::query()->whereEquals([
-    'column1' => 'value',
-    'column2' => ['a', 'b'], // auto uses whereIn
+    'status' => 'active',           // WHERE status = 'active'
+    'category_id' => [1, 2, 3],     // AND category_id IN (1, 2, 3)
 ]);
 ```
 
-## Compatibility with QueryBuilder
+Automatically uses `=` for scalar values and `IN` for arrays.
+
+---
+
+## 🔗 Compatibility with QueryBuilder
 
 All filtering, ordering, joining, and limiting operations are passed to the underlying `QueryBuilder`, which can be used
 directly for low-level control.

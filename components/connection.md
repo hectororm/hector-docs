@@ -7,7 +7,7 @@ summary-order: ;4
 
 # ⚡️ Connection
 
-> **Note**: While `Connection` are part of the **Hector ORM** ecosystem, they are available as a standalone package:
+> ℹ️ **Note**: While `Connection` are part of the **Hector ORM** ecosystem, they are available as a standalone package:
 > [`hectororm/connection`](https://github.com/hectororm/connection).
 > You can find it on
 > [Packagist](https://packagist.org/packages/hectororm/connection).
@@ -27,26 +27,20 @@ credentials, define a connection name, set up a read-only replica, or inject a l
 
 ### 🏗️ Constructor Parameters
 
-| Parameter  | Type     | Default                    | Description                                          |
-|------------|----------|----------------------------|------------------------------------------------------|
-| `dsn`      | `string` | —                          | DSN string for write operations (required)           |
-| `username` | `string` | `null`                     | Optional database username                           |
-| `password` | `string` | `null`                     | Optional database password                           |
-| `readDsn`  | `string` | `null`                     | Optional DSN string for read operations              |
-| `name`     | `string` | `Connection::DEFAULT_NAME` | Optional connection name                             |
-| `logger`   | `Logger` | `null`                     | Optional logger instance to capture executed queries |
+| Parameter  | Type     | Default     | Description                                          |
+|------------|----------|-------------|------------------------------------------------------|
+| `dsn`      | `string` | —           | DSN string for write operations (required)           |
+| `username` | `string` | `null`      | Optional database username                           |
+| `password` | `string` | `null`      | Optional database password                           |
+| `readDsn`  | `string` | `null`      | Optional DSN string for read operations              |
+| `name`     | `string` | `'default'` | Optional connection name                             |
+| `logger`   | `Logger` | `null`      | Optional logger instance to capture executed queries |
 
 ### 🔌 Simple Connection
 
 ```php
 use Hector\Connection\Connection;
 
-$connection = new Connection('mysql:host=localhost;dbname=mydb;user=root;password=secret');
-```
-
-You may also pass credentials explicitly as constructor arguments:
-
-```php
 $connection = new Connection(
     dsn: 'mysql:host=localhost;dbname=mydb',
     username: 'root',
@@ -79,6 +73,8 @@ $connection = new Connection(
 
 Read operations will use the read DSN until a write or transaction begins, after which the write DSN is used
 exclusively.
+
+---
 
 ## 🔎 Executing Queries
 
@@ -121,6 +117,8 @@ $connection->execute('INSERT INTO posts (title) VALUES (?)', ['Hello']);
 $id = $connection->getLastInsertId();
 ```
 
+---
+
 ## 🔁 Transactions
 
 Ensure atomic operations using transactions.
@@ -148,8 +146,10 @@ try {
 | `rollBack()`         | Roll back the current transaction      |
 | `inTransaction()`    | Returns `true` if inside a transaction |
 
-> ⚠️ **Note**: Nested calls to `beginTransaction()` are ignored. Each transaction must be matched with a `commit()` or
-`rollBack()`.
+> ⚠️ **Warning**: Nested calls to `beginTransaction()` are ignored. Each transaction must be matched with a `commit()` or
+> `rollBack()`.
+
+---
 
 ## 🧩 Managing Multiple Connections
 
@@ -170,19 +170,28 @@ use Hector\Connection\Connection;
 use Hector\Connection\ConnectionSet;
 
 $set = new ConnectionSet();
-$set->addConnection(new Connection('mysql:host=localhost;dbname=app', name: 'main'));
+$set->addConnection(new Connection('mysql:host=localhost;dbname=app', name: 'default'));
 $set->addConnection(new Connection('mysql:host=replica;dbname=app', name: 'replica'));
 
+// Get default connection (name = 'default')
 $main = $set->getConnection();
+
+// Get named connection
 $replica = $set->getConnection('replica');
+
+// Check existence
+$set->hasConnection('replica'); // true
+$set->hasConnection('unknown'); // false
 ```
+
+---
 
 ## 🪵 Query Logging
 
 To help debug and optimize queries, you can enable logging using the built-in `Logger` class. This logger collects
 detailed information for each executed SQL statement, including execution time and stack trace.
 
-> ⚠️ Logging should be disabled in production environments to avoid performance penalties and potential data exposure.
+> ⚠️ **Warning**: Logging should be disabled in production environments to avoid performance penalties and potential data exposure.
 
 ### Logger API
 
@@ -210,9 +219,21 @@ foreach ($logger->getLogs() as $log) {
 }
 ```
 
+---
+
 ## 🔍 Driver Information
 
-The `Connection` class can return introspective metadata about the current PDO driver in use.
+The `Connection` class can return introspective metadata about the current PDO driver in use via `getDriverInfo()`.
+
+```php
+$driverInfo = $connection->getDriverInfo();
+
+echo $driverInfo->getDriver();   // e.g. 'mysql'
+echo $driverInfo->getVersion();  // e.g. '8.0.32'
+
+$capabilities = $driverInfo->getCapabilities();
+$capabilities->hasJson();        // true
+```
 
 ### DriverInfo API
 

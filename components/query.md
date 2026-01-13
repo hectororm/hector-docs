@@ -7,7 +7,7 @@ summary-order: ;1
 
 # 🔨 Query
 
-> **Note**: While query builder are part of the **Hector ORM** ecosystem, they are available as a standalone package:
+> ℹ️ **Note**: While query builder are part of the **Hector ORM** ecosystem, they are available as a standalone package:
 > [`hectororm/query`](https://github.com/hectororm/query).
 > You can find it on
 > [Packagist](https://packagist.org/packages/hectororm/query).
@@ -47,18 +47,35 @@ enabling you to manually build the query and bind parameters.
 * `Hector\Query\Delete`
 * `Hector\Query\Union`
 
+### 📌 Specifying the Table
+
+Use `from()` to define the target table for your query:
+
+```php
+$queryBuilder->from('users');
+// SELECT * FROM users
+
+$queryBuilder->from('users', 'u');
+// SELECT * FROM users AS u
+
+// Multiple tables (implicit join)
+$queryBuilder
+    ->from('users', 'u')
+    ->from('profiles', 'p')
+    ->where('u.id', '=', 'p.user_id');
+```
+
 ### 🧪 Example
 
 ```php
+use Hector\Connection\Bind\BindParamList;
+use Hector\Connection\Connection;
 use Hector\Query\Select;
 
 $select = new Select();
 $select
     ->from('table')
     ->where('field', 'value');
-
-use Hector\Connection\Bind\BindParamList;
-use Hector\Connection\Connection;
 
 $binds = new BindParamList();
 $statement = $select->getStatement($binds);
@@ -67,11 +84,25 @@ $connection = new Connection('...');
 $result = $connection->fetchAll($statement, $binds);
 ```
 
+---
+
 ## 🧮 Conditions
 
 Both `WHERE` and `HAVING` clauses are supported using the same API. Simply switch the method prefix.
 
 ### Where / Having
+
+Two-argument form: column, value (implicit "=" operator):
+
+```php
+use Hector\Query\QueryBuilder;
+
+$queryBuilder
+    ->from('table', 'alias')
+    ->where('field', 'value');
+```
+
+Three-argument form (column, operator, value) :
 
 ```php
 use Hector\Query\QueryBuilder;
@@ -79,7 +110,7 @@ use Hector\Query\QueryBuilder;
 $queryBuilder
     ->from('table', 'alias')
     ->where('field', '=', 'value')
-    ->orWhere('field', '=', 'value2');
+    ->orWhere('field', '>=', 10);
 ```
 
 ### Condition Shortcuts
@@ -91,7 +122,7 @@ $queryBuilder->whereIn('id', [1, 2, 3]);
 $queryBuilder->whereNotBetween('age', 18, 30);
 $queryBuilder->whereGreaterThan('score', 50);
 $queryBuilder->whereExists(new Select(...));
-$queryBuilder->whereContains('substring');
+$queryBuilder->whereContains('name', 'john');
 ```
 
 Full list:
@@ -106,9 +137,41 @@ Full list:
 * `whereLessThanOrEqual($column, $value)`
 * `whereExists($statement)`
 * `whereNotExists($statement)`
-* `whereContains($string)`
-* `whereStartsWith($string)`
-* `whereEndsWith($string)`
+* `whereContains($column, $string)`
+* `whereStartsWith($column, $string)`
+* `whereEndsWith($column, $string)`
+
+All `where*` methods have their `having*` counterparts for filtering grouped results:
+
+```php
+$queryBuilder
+    ->from('orders')
+    ->column('customer_id')
+    ->column('SUM(amount)', 'total')
+    ->groupBy('customer_id')
+    ->having('total', '>', 1000)
+    ->orHaving('total', '<', 100);
+```
+
+Available:
+
+* `having()`
+* `orHaving()`
+* `havingIn()`
+* `havingNotIn()`
+* `havingBetween()`
+* `havingNotBetween()`,
+* `havingGreaterThan()`
+* `havingGreaterThanOrEqual()`
+* `havingLessThan()`
+* `havingLessThanOrEqual()`,
+* `havingExists()`
+* `havingNotExists()`
+* `havingContains()`
+* `havingStartsWith()`
+* `havingEndsWith()`.
+
+---
 
 ## 📋 Selecting Columns
 
@@ -116,11 +179,14 @@ You can customize the columns returned by your query:
 
 ```php
 $queryBuilder
+    ->from('users')
     ->column('name')
     ->column('email', 'user_email');
+// SELECT name, email AS user_email FROM users
 
 $queryBuilder->resetColumns();
 $queryBuilder->columns(['id', 'name', 'created_at']);
+// SELECT id, name, created_at FROM users
 ```
 
 ## 🧑‍🤝‍🧑 Grouping Results
@@ -129,11 +195,16 @@ To group query results:
 
 ```php
 $queryBuilder
+    ->from('products')
+    ->column('category_id')
+    ->column('COUNT(*)', 'count')
     ->groupBy('category_id')
     ->groupBy('status');
+// SELECT category_id, COUNT(*) AS count FROM products GROUP BY category_id, status
 
 $queryBuilder->resetGroups();
 $queryBuilder->groupByWithRollup();
+// Adds WITH ROLLUP modifier (MySQL)
 ```
 
 ## 🔢 Ordering Results
@@ -142,11 +213,14 @@ Sort your result set with `orderBy()`:
 
 ```php
 $queryBuilder
+    ->from('posts')
     ->orderBy('created_at', 'DESC')
     ->orderBy('name', 'ASC');
+// SELECT * FROM posts ORDER BY created_at DESC, name ASC
 
 $queryBuilder->resetOrder();
-$queryBuilder->random(); // ORDER BY RAND()
+$queryBuilder->random();
+// SELECT * FROM posts ORDER BY RAND()
 ```
 
 ## 📦 Limiting Results
@@ -194,6 +268,8 @@ $queryBuilder->rightJoin('tags', 'tags.id = posts.tag_id');
 $queryBuilder->resetJoin();
 ```
 
+---
+
 ## 🔀 Unions
 
 The `Union` class allows combining multiple `SELECT` queries:
@@ -202,14 +278,38 @@ The `Union` class allows combining multiple `SELECT` queries:
 use Hector\Query\Select;
 use Hector\Query\Union;
 
-$select1 = (new Select())->from('table1');
-$select2 = (new Select())->from('table2');
+$select1 = (new Select())->from('customers')->column('name');
+$select2 = (new Select())->from('suppliers')->column('name');
 
 $union = new Union();
 $union->addSelect($select1, $select2);
 ```
 
 `Union` also implements `StatementInterface`, allowing you to bind and execute it like any other query.
+
+### Executing a Union
+
+```php
+use Hector\Connection\Bind\BindParamList;
+
+$binds = new BindParamList();
+$statement = $union->getStatement($binds);
+
+// Execute via connection
+foreach ($connection->fetchAll($statement, $binds) as $row) {
+    echo $row['name'];
+}
+```
+
+### Union All (with duplicates)
+
+```php
+$union = new Union();
+$union->addSelect($select1, $select2);
+$union->all(); // UNION ALL instead of UNION
+```
+
+---
 
 ## 📤 Fetching Results
 
@@ -221,7 +321,7 @@ $queryBuilder->fetchAll();      // Generator - all rows
 $queryBuilder->fetchColumn();   // Generator - specific column
 ```
 
-> `fetchAll()` and `fetchColumn()` return a `Generator`. Refer to PHP
+> 💡 **Tip**: `fetchAll()` and `fetchColumn()` return a `Generator`. Refer to PHP
 > documentation: [https://www.php.net/manual/en/class.generator.php](https://www.php.net/manual/en/class.generator.php)
 
 ## 🔢 Counting Results
@@ -262,6 +362,8 @@ $exists = $queryBuilder
 ```
 
 Does not alter the query builder instance.
+
+---
 
 ## ✍️ Shortcuts for Insert / Update / Delete
 

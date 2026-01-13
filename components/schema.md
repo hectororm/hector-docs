@@ -7,7 +7,7 @@ summary-order: ;5
 
 # 📏 Schema
 
-> **Note**: While schemas are part of the **Hector ORM** ecosystem, they are available as a standalone package:
+> ℹ️ **Note**: While schemas are part of the **Hector ORM** ecosystem, they are available as a standalone package:
 > [`hectororm/schema`](https://github.com/hectororm/schema).
 > You can find it on
 > [Packagist](https://packagist.org/packages/hectororm/schema).
@@ -31,7 +31,8 @@ independent and can be used on its own.
 | MariaDB |  10.5   |       ✔       |
 | Sqlite  |   3.x   |       ✔       |
 
-> ℹ️ Know of a DBMS version not listed here but works fine? Contributions are welcome — open a PR!
+> ℹ️ **Note**: Versions listed are actively tested. Older versions may work but are not officially supported.
+> Know of a DBMS version not listed here but works fine? Contributions are welcome — open a PR!
 
 ## 🔧 Usage
 
@@ -42,9 +43,15 @@ The schema generator reads your DB structure and returns rich PHP objects that d
 ```php
 use Hector\Connection\Connection;
 use Hector\Schema\Generator\MySQL;
+use Hector\Schema\Generator\Sqlite;
 
-$connection = new Connection('...');
+// MySQL / MariaDB
+$connection = new Connection('mysql:host=localhost;dbname=mydb', 'user', 'pass');
 $generator = new MySQL($connection);
+
+// SQLite
+$connection = new Connection('sqlite:/path/to/database.db');
+$generator = new Sqlite($connection);
 
 $schema = $generator->generateSchema('schema_name');
 // Returns a `Hector\Schema\Schema` object
@@ -58,7 +65,7 @@ Available generators:
 * `Hector\Schema\Generator\MySQL` — for MySQL and MariaDB
 * `Hector\Schema\Generator\Sqlite` — for SQLite
 
-> ✨ Tip: You can use different generators for different environments (e.g., dev SQLite, prod MySQL).
+> 💡 **Tip**: You can use different generators for different environments (e.g., dev SQLite, prod MySQL).
 
 ### 📁 Caching schemas
 
@@ -78,6 +85,10 @@ $schema = unserialize(file_get_contents('cache/schema.ser'));
 Inheritance and references between objects are preserved during (de)serialization. This makes caching simple and
 flexible — ideal for integrating into your own caching logic 🌟
 
+> ⚠️ **Warning**: Ensure your cache is invalidated when the database schema changes (e.g., after migrations).
+
+---
+
 ## 📚 API Reference
 
 This section covers the main classes used to explore database schemas.
@@ -93,6 +104,17 @@ A container for multiple schemas. Useful when your application interacts with mu
 * `getSchema(string $name, ?string $connection = null): Schema`
 * `hasTable(string $name, ?string $schemaName = null, ?string $connection = null): bool`
 * `getTable(string $name, ?string $schemaName = null, ?string $connection = null): Table`
+
+```php
+// Get table from default schema
+$usersTable = $container->getTable('users');
+
+// Get table from specific schema
+$usersTable = $container->getTable('users', 'my_database');
+
+// Get table from specific schema and connection
+$usersTable = $container->getTable('users', 'my_database', 'replica');
+```
 
 > This class is iterable: `foreach ($container as $schema)` will yield `Hector\Schema\Schema` objects.
 
@@ -214,6 +236,8 @@ Represents a foreign key constraint.
 * `getReferencedTable(): ?Table`
 * `getReferencedColumns(): Generator`
 
+---
+
 ## 🎓 Example: Basic schema introspection
 
 ```php
@@ -222,11 +246,32 @@ $schema = $generator->generateSchema('my_database');
 
 foreach ($schema as $table) {
     echo "Table: " . $table->getName() . "\n";
+    
+    // Columns
     foreach ($table->getColumns() as $column) {
-        echo "  Column: " . $column->getName() . " (" . $column->getType() . ")\n";
+        echo "  Column: " . $column->getName() . " (" . $column->getType() . ")";
+        echo $column->isNullable() ? " NULL" : " NOT NULL";
+        echo $column->isPrimary() ? " [PK]" : "";
+        echo "\n";
     }
+    
+    // Indexes
+    foreach ($table->getIndexes() as $index) {
+        echo "  Index: " . $index->getName() . " (" . $index->getType() . ")";
+        echo " on [" . implode(', ', $index->getColumnsName()) . "]\n";
+    }
+    
+    // Foreign keys
+    foreach ($table->getForeignKeys() as $fk) {
+        echo "  FK: " . $fk->getName();
+        echo " [" . implode(', ', $fk->getColumnsName()) . "]";
+        echo " -> " . $fk->getReferencedTableName();
+        echo " [" . implode(', ', $fk->getReferencedColumnsName()) . "]\n";
+    }
+    
+    echo "\n";
 }
 ```
 
-This example will output the structure of your database with all tables and their columns. Great for CLI tools,
-documentation generators or migration scripts! 📊
+This example will output the structure of your database with all tables, columns, indexes and foreign keys.
+Great for CLI tools, documentation generators or migration scripts! 📊

@@ -7,14 +7,15 @@ summary-order: ;2
 
 # 📂 Collection
 
-> **Note**: While collection are part of the **Hector ORM** ecosystem, they are available as a standalone package:
+> ℹ️ **Note**: While collection are part of the **Hector ORM** ecosystem, they are available as a standalone package:
 > [`hectororm/collection`](https://github.com/hectororm/collection).
 > You can find it on
 > [Packagist](https://packagist.org/packages/hectororm/collection).
 > You can use them independently of the ORM, in any PHP application. 🎉
 
 Working with arrays in PHP is simple, but when it comes to chaining operations like filtering, mapping, or sorting, code
-can quickly become verbose and harder to read. **Hector ORM** introduces a powerful abstraction: **collections** — iterable
+can quickly become verbose and harder to read. **Hector ORM** introduces a powerful abstraction: **collections** —
+iterable
 data structures that combine the convenience of arrays with the expressiveness of modern fluent interfaces.
 
 Collections are especially useful for transforming data retrieved from APIs, databases, or user input. They encourage a
@@ -28,6 +29,8 @@ Two types of collections are available:
   efficiently. Its values are generated on the fly, which makes it ideal when working with streams or when you want to
   avoid unnecessary memory usage.
 
+---
+
 ## 🎓 Creating Collections
 
 ```php
@@ -38,7 +41,7 @@ $collection = new Collection();
 $collection = new Collection(['my', 'initial', 'array']);
 
 $lazy = new LazyCollection();
-lazy = new LazyCollection(['my', 'initial', 'array']);
+$lazy = new LazyCollection(['my', 'initial', 'array']);
 ```
 
 All collections implement `CollectionInterface`. Only `Collection` is `Countable`.
@@ -170,17 +173,28 @@ Filter items that are instances of given class(es).
 
 ```php
 $collection = Collection::new([new stdClass(), new SimpleXMLElement('<root/>')]);
-$collection = $collection->filterInstanceOf(stdClass::class);
-$collection->getArrayCopy(); // [object(stdClass)]
+$filtered = $collection->filterInstanceOf(stdClass::class);
+$filtered->count(); // 1
 ```
 
 ### `map(callable $callback): static`
 
 Map callback to each item.
 
+```php
+$collection = Collection::new([1, 2, 3]);
+$mapped = $collection->map(fn($v) => $v * 2);
+$mapped->getArrayCopy(); // [2, 4, 6]
+```
+
 ### `each(callable $callback): static`
 
 Apply callback to each item and return original collection.
+
+```php
+$collection = Collection::new(['foo', 'bar']);
+$collection->each(fn($v) => print($v . ' ')); // Outputs: foo bar
+```
 
 ### `search(callable|mixed $needle, bool $strict = false): int|string|false`
 
@@ -195,13 +209,14 @@ $collection->search(fn($v) => str_starts_with($v, 'ba')); // 1
 
 ### `get(int $index = 0): mixed`
 
-Get item at given index (negative indexes allowed).
+Get item at given index (negative indexes allowed). Returns `null` if index is out of bounds.
 
 ```php
 $collection = Collection::new(['foo', 'bar', 'baz']);
-$collection->get();    // 'foo'
-$collection->get(1);   // 'bar'
-$collection->get(-1);  // 'baz'
+$collection->get();     // 'foo'
+$collection->get(1);    // 'bar'
+$collection->get(-1);   // 'baz'
+$collection->get(99);   // null
 ```
 
 ### `first(?callable $callback = null): mixed`
@@ -257,9 +272,19 @@ $chunks = $collection->chunk(2)->getArrayCopy();
 
 Return all keys.
 
+```php
+$collection = Collection::new(['a' => 'foo', 'b' => 'bar']);
+$collection->keys()->getArrayCopy(); // ['a', 'b']
+```
+
 ### `values(): static`
 
 Return all values.
+
+```php
+$collection = Collection::new(['a' => 'foo', 'b' => 'bar']);
+$collection->values()->getArrayCopy(); // ['foo', 'bar']
+```
 
 ### `unique(): static`
 
@@ -274,14 +299,21 @@ $collection->unique()->getArrayCopy(); // ['k1' => 'foo', 'bar', 'k2' => 'baz']
 
 Flip keys and values.
 
+```php
+$collection = Collection::new(['a' => 'foo', 'b' => 'bar']);
+$collection->flip()->getArrayCopy(); // ['foo' => 'a', 'bar' => 'b']
+```
+
 ### `reverse(bool $preserve_keys = false): static`
 
 Reverse the order of items.
 
 ```php
 $collection = Collection::new(['k1' => 'foo', 'foo', 'bar', 'k2' => 'baz']);
-$collection->reverse()->getArrayCopy();
-$collection->reverse(true)->getArrayCopy();
+$collection->reverse()->getArrayCopy(); 
+// ['baz', 'bar', 'foo', 'foo']
+$collection->reverse(true)->getArrayCopy(); 
+// ['k2' => 'baz', 1 => 'bar', 0 => 'foo', 'k1' => 'foo']
 ```
 
 ### `column(string|int|Closure|null $column_key, string|int|Closure|null $index_key = null): static`
@@ -295,32 +327,61 @@ $collection = Collection::new([
     ['k1' => 'baz', 'value' => 'baz value'],
 ]);
 $collection->column('k1')->getArrayCopy();
+// ['foo', 'bar', 'baz']
 $collection->column('value', 'k1')->getArrayCopy();
+// ['foo' => 'foo value', 'bar' => 'bar value', 'baz' => 'baz value']
 ```
 
 ### `rand(int $length = 1): static`
 
 Pick one or more random items.
 
+```php
+$collection = Collection::new(['foo', 'bar', 'baz']);
+$collection->rand()->getArrayCopy();    // e.g. ['bar']
+$collection->rand(2)->getArrayCopy();   // e.g. ['foo', 'baz']
+```
+
 ### `sum(): int|float`
 
 Sum of values.
+
+```php
+Collection::new([10, 20, 30])->sum(); // 60
+```
 
 ### `avg(): int|float`
 
 Average of values.
 
+```php
+Collection::new([10, 20, 30])->avg(); // 20
+```
+
 ### `median(): int|float`
 
 Median of values.
+
+```php
+Collection::new([1, 2, 3, 4, 5])->median(); // 3
+Collection::new([1, 2, 3, 4])->median();    // 2.5
+```
 
 ### `variance(): int|float`
 
 Population variance.
 
+```php
+Collection::new([2, 4, 4, 4, 5, 5, 7, 9])->variance(); // 4
+```
+
 ### `deviation(): int|float`
 
 Standard deviation.
+
+```php
+Collection::new([2, 4, 4, 4, 5, 5, 7, 9])->deviation(); // 2
+```
 
 ### `reduce(callable $callback, mixed $initial = null): mixed`
 
@@ -329,6 +390,8 @@ Reduce to a single value.
 ```php
 Collection::new([1, 2, 3])->reduce(fn($c, $i) => $c + $i, 10); // 16
 ```
+
+---
 
 ## 🔍 `Collection` Additional Methods
 
@@ -351,6 +414,14 @@ Collection::new(['foo'])->prepend('bar')->getArrayCopy(); // ['bar', 'foo']
 ### `lazy(): LazyCollection`
 
 Convert to lazy collection.
+
+```php
+$collection = Collection::new(['foo', 'bar', 'baz']);
+$lazy = $collection->lazy();
+// $lazy is now a LazyCollection
+```
+
+---
 
 ## 🧵 `LazyCollection`
 

@@ -4,11 +4,17 @@ breadcrumb:
 summary-order: 1
 ---
 
-# Getting Started 🚀
+# 🚀 Getting Started
 
 ## Introduction
 
 **Hector ORM** is a lightweight, framework-agnostic PHP ORM — designed to be modular, fast, and expressive. It draws inspiration from existing ORM concepts, while promoting freedom of structure and strong typing.
+
+### Requirements
+
+- PHP 8.0+
+- PDO extension
+- Database driver (e.g., `pdo_mysql`, `pdo_sqlite`)
 
 ### What is an ORM?
 
@@ -16,7 +22,7 @@ summary-order: 1
 >
 > — [Wikipedia](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping)
 
-### Choose Your Style ✨
+### ✨ Choose Your Style
 
 You can manage entities in multiple ways:
 
@@ -26,7 +32,7 @@ You can manage entities in multiple ways:
 
 ## Quick Start
 
-### 1. Installation 📦
+### 1. 📦 Installation
 
 Install with [Composer](https://getcomposer.org/):
 
@@ -48,11 +54,11 @@ $connection = new Connection('mysql:host=localhost;dbname=test', 'user', 'pass')
 use Hector\Orm\OrmFactory;
 
 $orm = OrmFactory::orm([
-    'schemas' => ['my-schema']
+    'schemas' => ['my-schema'] // Database name(s) to introspect
 ], $connection);
 ```
 
-### 4. Define Entities 🧱
+### 4. 🧱 Define Entities
 
 ```php
 use Hector\Orm\Attributes as Orm;
@@ -62,10 +68,10 @@ use Hector\Orm\Entity\MagicEntity;
 class Foo extends MagicEntity {}
 
 #[Orm\BelongsTo(Foo::class, 'foo')]
-class Bar {}
+class Bar extends MagicEntity {}
 ```
 
-### 5. Use the ORM 💡
+### 5. 💡 Use the ORM
 
 ```php
 $foo = Foo::findOrFail(1); // find a Foo entity by primary key
