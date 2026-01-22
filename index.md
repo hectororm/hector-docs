@@ -30,6 +30,15 @@ You can manage entities in multiple ways:
 * [Magic entities](./orm/entity.md): rely on **Hector ORM** dynamic behavior using PHP’s magic methods.
 * Roll your own 🧪: create a custom Mapper if you want total control over mapping logic.
 
+### Why Hector ORM?
+
+| Feature                  | Hector ORM | Doctrine | Eloquent |
+|--------------------------|:----------:|:--------:|:--------:|
+| Zero config              |     ✅     |    ❌    |    ⚠️   |
+| Framework-agnostic       |     ✅     |    ✅    |    ❌   |
+| Magic + Classic entities |     ✅     |    ❌    |    ✅   |
+| Schema introspection     |     ✅     |    ❌    |    ❌   |
+
 ## Quick Start
 
 ### 1. 📦 Installation
