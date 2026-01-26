@@ -2,7 +2,7 @@
 breadcrumb:
 - Components
 - Query Builder
-summary-order: ;1
+summary-order: 3;1
 ---
 
 # 🔨 Query

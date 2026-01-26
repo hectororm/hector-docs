@@ -2,7 +2,7 @@
 breadcrumb:
   - ORM
   - Advanced configuration
-summary-order: ;1
+summary-order: 2;1
 ---
 
 # ⚙️ Advanced configuration
