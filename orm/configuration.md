@@ -190,6 +190,32 @@ names.
 
 ---
 
+## 🔢 Default Ordering
+
+Use the `Hector\Orm\Attributes\OrderBy` attribute on the class to define a default sort order for queries on this entity. This attribute is repeatable to support multi-column sorting.
+
+**Example:**
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\OrderBy('created_at', 'DESC')]
+#[Orm\OrderBy('name', 'ASC')]
+class Post extends MagicEntity {}
+```
+
+In this example, all queries on `Post` will be sorted by `created_at DESC`, then by `name ASC` by default.
+
+| Parameter | Type    | Required | Description                              |
+|-----------|---------|----------|------------------------------------------|
+| `column`  | string  | Yes      | Column name to sort by                   |
+| `order`   | string  | No       | Sort direction (`ASC` or `DESC`)         |
+
+> 💡 **Tip**: You can override the default order in any query using `orderBy()` on the builder.
+
+---
+
 ## 🧩 Specify a Custom Mapper
 
 Use the `Hector\Orm\Attributes\Mapper` attribute on the class to associate a custom mapper. The given class must
