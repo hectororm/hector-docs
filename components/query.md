@@ -404,3 +404,34 @@ $queryBuilder
 ```
 
 These shortcut methods do not affect the `QueryBuilder` instance, so it remains reusable for further operations.
+
+---
+
+## 🔒 Locking Rows
+
+Use the `$lock` parameter on fetch methods to acquire a `FOR UPDATE` lock on selected rows. This is useful for preventing concurrent modifications in transactional contexts.
+
+```php
+$connection->beginTransaction();
+
+// Lock the row for update
+$user = $queryBuilder
+    ->from('users')
+    ->where('id', 1)
+    ->fetchOne(lock: true);
+
+// Modify and save
+$queryBuilder->from('users')->where('id', 1)->update(['balance' => $user['balance'] - 100]);
+
+$connection->commit();
+```
+
+Available on:
+
+* `fetchOne(bool $lock = false)`
+* `fetchAll(bool $lock = false)`
+* `fetchColumn(int $column = 0, bool $lock = false)`
+
+> ⚠️ **Warning**: Locking requires an active transaction. The lock is released when the transaction is committed or rolled back.
+
+> 💡 **Tip**: On databases that support it (MySQL 8+, PostgreSQL), `SKIP LOCKED` is automatically added to avoid blocking on already-locked rows.
