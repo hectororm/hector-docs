@@ -147,6 +147,45 @@ $user->firstname = 'Modified';
 $user->refresh(); // Reloads original data from DB
 ```
 
+### Loading Relations On-Demand
+
+Use `load()` to eagerly load relations on an existing entity instance. This is useful when you need to load relations after the entity has been fetched, avoiding N+1 queries.
+
+```php
+$user = User::find(1);
+
+// Load single relation
+$user->load(['posts']);
+
+// Load multiple relations
+$user->load(['posts', 'profile']);
+
+// Load nested relations
+$user->load(['posts' => ['comments', 'author']]);
+```
+
+> 💡 **Tip**: For bulk loading on collections, prefer `with()` on the query builder. Use `load()` when you need to load relations on an already-fetched entity.
+
+### Comparing Entities
+
+Use `isEqualTo()` to compare two entities by their primary key values:
+
+```php
+$user1 = User::find(1);
+$user2 = User::find(1);
+$user3 = User::find(2);
+
+$user1->isEqualTo($user2); // true (same primary key)
+$user1->isEqualTo($user3); // false (different primary key)
+
+// Also works with pivot data for ManyToMany relations
+$role1 = $user->roles[0];
+$role2 = $anotherUser->roles[0];
+$role1->isEqualTo($role2); // Compares both PK and pivot keys
+```
+
+> 💡 **Tip**: This method compares primary key values, not object identity. Two different instances representing the same database row are considered equal.
+
 ### Bulk Operations on Collections
 
 Collections returned by the ORM support bulk operations, allowing you to apply actions to multiple entities at once:
