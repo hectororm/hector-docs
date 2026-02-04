@@ -388,4 +388,19 @@ You may also use a subquery for insert:
 $queryBuilder->insert((new Select())->from('source_table'));
 ```
 
+### Ignoring Duplicates
+
+Use `ignore()` to skip rows that would cause duplicate key violations:
+
+```php
+$queryBuilder
+    ->from('users')
+    ->ignore()
+    ->insert([
+        'email' => 'alice@example.com',
+        'name' => 'Alice'
+    ]);
+// INSERT IGNORE INTO users ...
+```
+
 These shortcut methods do not affect the `QueryBuilder` instance, so it remains reusable for further operations.
