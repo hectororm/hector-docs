@@ -331,6 +331,78 @@ $user->getRelated()->unset('roles');
 
 ---
 
+## 📊 Pivot Data (Many-to-Many)
+
+When working with `BelongsToMany` relationships, you often need to access additional columns from the pivot table (e.g., timestamps, quantities, or status flags). Use `getPivot()` to retrieve this data.
+
+### Accessing Pivot Data
+
+```php
+#[BelongsToMany(
+    target: Role::class,
+    name: 'roles',
+    pivotTable: 'user_role',
+)]
+class User extends MagicEntity {}
+```
+
+Given a pivot table `user_role` with additional columns:
+
+```sql
+CREATE TABLE user_role (
+    user_id INT,
+    role_id INT,
+    assigned_at DATETIME,
+    assigned_by INT,
+    PRIMARY KEY (user_id, role_id)
+);
+```
+
+Access pivot data on related entities:
+
+```php
+$user = User::find(1);
+
+foreach ($user->roles as $role) {
+    $pivot = $role->getPivot();
+    
+    // Get pivot keys (foreign keys)
+    $pivot->getKeys();
+    // ['user_id' => 1, 'role_id' => 5]
+    
+    // Get additional pivot data
+    $pivot->getData();
+    // ['assigned_at' => '2025-01-15 10:30:00', 'assigned_by' => 42]
+}
+```
+
+### PivotData API
+
+| Method                    | Return Type | Description                                      |
+|---------------------------|-------------|--------------------------------------------------|
+| `getKeys()`               | `array`     | Foreign key columns linking the two entities     |
+| `getData()`               | `array`     | Additional columns from the pivot table          |
+| `setData(array, bool)`    | `void`      | Set pivot data (second param: replace or merge)  |
+
+### Modifying Pivot Data
+
+```php
+$role = $user->roles[0];
+$pivot = $role->getPivot();
+
+// Replace all pivot data
+$pivot->setData(['assigned_at' => date('Y-m-d H:i:s')]);
+
+// Merge with existing data
+$pivot->setData(['notes' => 'Promoted'], replace: false);
+
+$user->save(cascade: true);
+```
+
+> ⚠️ **Warning**: `getPivot()` returns `null` for entities not loaded through a ManyToMany relationship.
+
+---
+
 ## 🚫 Without Foreign Keys
 
 If your database does not enforce foreign keys, always declare column mappings manually.
