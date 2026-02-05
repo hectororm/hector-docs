@@ -435,3 +435,72 @@ Available on:
 > ⚠️ **Warning**: Locking requires an active transaction. The lock is released when the transaction is committed or rolled back.
 
 > 💡 **Tip**: On databases that support it (MySQL 8+, PostgreSQL), `SKIP LOCKED` is automatically added to avoid blocking on already-locked rows.
+
+---
+
+## 📄 Integrated Pagination
+
+> 🆕 **Info**: *Since version 1.3*
+
+The `QueryBuilder` provides a `paginate()` method that integrates directly with the [Pagination](pagination.md) component. It automatically handles limit/offset and returns a pagination object.
+
+```php
+use Hector\Pagination\Request\OffsetPaginationRequest;
+
+$request = new OffsetPaginationRequest(page: 3, perPage: 20);
+
+$pagination = $queryBuilder
+    ->from('users')
+    ->where('active', true)
+    ->orderBy('created_at', 'DESC')
+    ->paginate($request);
+
+// Access results
+foreach ($pagination as $row) {
+    echo $row['name'];
+}
+
+// Pagination metadata
+$pagination->getCurrentPage();  // 3
+$pagination->hasMore();         // true/false
+$pagination->getTotal();        // null (not computed by default)
+```
+
+### With Total Count
+
+Pass `withTotal: true` to compute the total count (requires an additional query):
+
+```php
+$pagination = $queryBuilder
+    ->from('users')
+    ->paginate($request, withTotal: true);
+
+$pagination->getTotal();       // 1523
+$pagination->getTotalPages();  // 77
+```
+
+### Supported Request Types
+
+| Request Type                | Returns              |
+|-----------------------------|----------------------|
+| `OffsetPaginationRequest`   | `OffsetPagination`   |
+| `CursorPaginationRequest`   | `CursorPagination`   |
+| `RangePaginationRequest`    | `RangePagination`    |
+
+```php
+use Hector\Pagination\Request\CursorPaginationRequest;
+
+$request = new CursorPaginationRequest(
+    perPage: 20,
+    position: ['id' => 42],
+);
+
+$pagination = $queryBuilder
+    ->from('users')
+    ->orderBy('id')
+    ->paginate($request);
+
+$pagination->getNextPosition();  // ['id' => 62]
+```
+
+> 💡 **Tip**: See the [Pagination documentation](pagination.md) for details on pagination types, navigators, and response preparation.

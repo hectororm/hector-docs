@@ -211,6 +211,81 @@ Automatically uses `=` for scalar values and `IN` for arrays.
 
 ---
 
+## 📄 Pagination
+
+> 🆕 **Info**: *Since version 1.3*
+
+The `Builder` provides a `paginate()` method that returns paginated entity collections. It integrates with the [Pagination](../components/pagination.md) component.
+
+### Basic Usage
+
+```php
+use Hector\Pagination\Request\OffsetPaginationRequest;
+
+$request = new OffsetPaginationRequest(page: 2, perPage: 15);
+
+$pagination = User::query()
+    ->where('active', true)
+    ->orderBy('created_at', 'DESC')
+    ->paginate($request);
+
+// Iterate over User entities
+foreach ($pagination as $user) {
+    echo $user->name;
+}
+
+// Pagination metadata
+$pagination->getCurrentPage();  // 2
+$pagination->hasMore();         // true/false
+```
+
+### With Total Count
+
+```php
+$pagination = User::query()
+    ->where('active', true)
+    ->paginate($request, withTotal: true);
+
+$pagination->getTotal();       // 150
+$pagination->getTotalPages();  // 10
+```
+
+### Cursor Pagination
+
+For large datasets, cursor pagination is more efficient:
+
+```php
+use Hector\Pagination\Request\CursorPaginationRequest;
+
+$request = new CursorPaginationRequest(
+    perPage: 20,
+    position: ['id' => 100],
+);
+
+$pagination = Post::query()
+    ->orderBy('id')
+    ->paginate($request);
+
+foreach ($pagination as $post) {
+    // Process Post entities
+}
+
+$pagination->getNextPosition();     // ['id' => 120]
+$pagination->getPreviousPosition(); // ['id' => 100]
+```
+
+### Supported Request Types
+
+| Request Type                | Returns              | Best For                    |
+|-----------------------------|----------------------|-----------------------------|
+| `OffsetPaginationRequest`   | `OffsetPagination`   | Traditional page navigation |
+| `CursorPaginationRequest`   | `CursorPagination`   | Large datasets, infinite scroll |
+| `RangePaginationRequest`    | `RangePagination`    | RFC 7233 style APIs         |
+
+> 💡 **Tip**: Unlike the raw `QueryBuilder`, the ORM `Builder` returns hydrated entity collections, not raw arrays.
+
+---
+
 ## 🔗 Compatibility with QueryBuilder
 
 All filtering, ordering, joining, and limiting operations are passed to the underlying `QueryBuilder`, which can be used
