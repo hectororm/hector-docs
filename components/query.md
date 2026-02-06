@@ -223,6 +223,137 @@ $queryBuilder->random();
 // SELECT * FROM posts ORDER BY RAND()
 ```
 
+## 🔀 Sorting
+
+> 🆕 **Info**: *Since version 1.3*
+
+The `Sort` namespace provides type-safe, composable sorting objects. This is especially useful when sort parameters come from user input (e.g. `?sort=title:desc`) and need to be validated before being applied to a query.
+
+### Sort Objects
+
+The `SortInterface` defines a single method: `apply(QueryBuilder $builder): void`. Two implementations are provided:
+
+```php
+use Hector\Query\Sort\Sort;
+use Hector\Query\Sort\MultiSort;
+
+// Single sort
+$sort = new Sort('title', 'ASC');
+$sort->apply($builder);
+
+// Multiple sorts
+$sort = new MultiSort(
+    new Sort('title', 'ASC'),
+    new Sort('id', 'DESC'),
+);
+$sort->apply($builder);
+```
+
+The `QueryBuilder` also provides a fluent shortcut:
+
+```php
+$builder->applySort($sort);
+```
+
+> ℹ️ `applySort()` is **additive**: it appends the sort to the existing order. To replace the existing order, call `resetOrder()` first:
+> ```php
+> $builder->resetOrder()->applySort($sort);
+> ```
+
+### SortConfig
+
+`SortConfig` parses and validates sort parameters from HTTP query strings:
+
+```php
+use Hector\Query\Sort\SortConfig;
+
+$sortConfig = new SortConfig(
+    allowed: ['title', 'created_at', 'id'],
+    default: ['title'],
+);
+
+// Resolve from query params: ?sort=created_at:desc
+$sort = $sortConfig->resolve($request->getQueryParams());
+$builder->resetOrder()->applySort($sort);
+```
+
+Constructor parameters:
+
+| Parameter    | Type              | Description                                              |
+|--------------|-------------------|----------------------------------------------------------|
+| `allowed`    | `array`           | Allowed columns. Simple (`['title']`) or mapped (`['name' => 'user_name']`) |
+| `default`    | `array`           | Default sort. Supports multiple formats (see below)      |
+| `defaultDir` | `string`          | Default direction (`ASC` or `DESC`), defaults to `ASC`   |
+| `sortParam`  | `string`          | Query parameter name, defaults to `sort`                 |
+
+Default sort formats:
+
+```php
+// String (uses defaultDir)
+$config = new SortConfig(allowed: ['title'], default: ['title']);
+
+// Indexed array
+$config = new SortConfig(allowed: ['title'], default: [['title', 'DESC']]);
+
+// Associative array
+$config = new SortConfig(allowed: ['title'], default: [['column' => 'title', 'dir' => 'DESC']]);
+
+// Mixed multi-sort
+$config = new SortConfig(
+    allowed: ['title', 'id', 'date'],
+    default: ['title', ['id', 'DESC']],
+);
+```
+
+Supported URL formats:
+
+- Single: `?sort=title:asc`
+- Multiple: `?sort[]=title:asc&sort[]=id:desc`
+- Without direction (uses `defaultDir`): `?sort=title`
+
+Column mapping allows exposing different names in the API than the actual column names:
+
+```php
+$config = new SortConfig(
+    allowed: ['name' => 'user_name', 'date' => 'created_at'],
+    default: ['name'],
+);
+
+// ?sort=date:desc → ORDER BY created_at DESC
+$sort = $config->resolve($queryParams);
+```
+
+### Custom Sort Implementations
+
+Implement `SortInterface` for custom sorting logic:
+
+```php
+use Hector\Query\Sort\SortInterface;
+use Hector\Query\QueryBuilder;
+
+class RandomSort implements SortInterface
+{
+    public function apply(QueryBuilder $builder): void
+    {
+        $builder->orderBy('RAND()');
+    }
+}
+
+class NullsLastSort implements SortInterface
+{
+    public function __construct(
+        private string $column,
+        private string $dir = 'ASC',
+    ) {}
+
+    public function apply(QueryBuilder $builder): void
+    {
+        $builder->orderBy(sprintf('%s IS NULL', $this->column), 'ASC');
+        $builder->orderBy($this->column, $this->dir);
+    }
+}
+```
+
 ## 📦 Limiting Results
 
 Control pagination using `limit()` and `offset()`:
