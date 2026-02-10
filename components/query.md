@@ -1,7 +1,7 @@
 ---
 breadcrumb:
-- Components
-- Query Builder
+  - Components
+  - Query Builder
 summary-order: 3;1
 ---
 
@@ -227,7 +227,8 @@ $queryBuilder->random();
 
 > 🆕 **Info**: *Since version 1.3*
 
-The `Sort` namespace provides type-safe, composable sorting objects. This is especially useful when sort parameters come from user input (e.g. `?sort=title:desc`) and need to be validated before being applied to a query.
+The `Sort` namespace provides type-safe, composable sorting objects. This is especially useful when sort parameters come
+from user input (e.g. `?sort=title:desc`) and need to be validated before being applied to a query.
 
 ### Sort Objects
 
@@ -255,14 +256,16 @@ The `QueryBuilder` also provides a fluent shortcut:
 $builder->applySort($sort);
 ```
 
-> ℹ️ `applySort()` is **additive**: it appends the sort to the existing order. To replace the existing order, call `resetOrder()` first:
+> ℹ️ `applySort()` is **additive**: it appends the sort to the existing order. To replace the existing order, call
+`resetOrder()` first:
 > ```php
 > $builder->resetOrder()->applySort($sort);
 > ```
 
 ### SortConfig
 
-`SortConfig` parses and validates sort parameters from HTTP query strings:
+`SortConfig` parses and validates sort parameters from HTTP query strings. It lets you control which columns are
+sortable, map public parameter names to real column names, and optionally lock sort directions.
 
 ```php
 use Hector\Query\Sort\SortConfig;
@@ -277,51 +280,97 @@ $sort = $sortConfig->resolve($request->getQueryParams());
 $builder->resetOrder()->applySort($sort);
 ```
 
-Constructor parameters:
+#### Constructor parameters
 
-| Parameter    | Type              | Description                                              |
-|--------------|-------------------|----------------------------------------------------------|
-| `allowed`    | `array`           | Allowed columns. Simple (`['title']`) or mapped (`['name' => 'user_name']`) |
-| `default`    | `array`           | Default sort. Supports multiple formats (see below)      |
-| `defaultDir` | `string`          | Default direction (`ASC` or `DESC`), defaults to `ASC`   |
-| `sortParam`  | `string`          | Query parameter name, defaults to `sort`                 |
+| Parameter    | Type     | Default  | Description                                                    |
+|--------------|----------|----------|----------------------------------------------------------------|
+| `allowed`    | `array`  | required | Allowed sort columns (see [Allowed formats](#allowed-formats)) |
+| `default`    | `array`  | required | Default sort in `column:dir` format (e.g. `['title:desc']`)    |
+| `defaultDir` | `string` | `ASC`    | Direction used when not specified by the user or the mapping   |
+| `sortParam`  | `string` | `sort`   | Query parameter name to read from                              |
 
-Default sort formats:
+#### Allowed formats
+
+The `allowed` parameter accepts several formats:
 
 ```php
-// String (uses defaultDir)
-$config = new SortConfig(allowed: ['title'], default: ['title']);
-
-// Indexed array
-$config = new SortConfig(allowed: ['title'], default: [['title', 'DESC']]);
-
-// Associative array
-$config = new SortConfig(allowed: ['title'], default: [['column' => 'title', 'dir' => 'DESC']]);
-
-// Mixed multi-sort
+// Simple: column name as-is, user can choose direction
 $config = new SortConfig(
-    allowed: ['title', 'id', 'date'],
-    default: ['title', ['id', 'DESC']],
+    allowed: ['title', 'created_at', 'id'],
+    default: ['title'],
 );
-```
 
-Supported URL formats:
-
-- Single: `?sort=title:asc`
-- Multiple: `?sort[]=title:asc&sort[]=id:desc`
-- Without direction (uses `defaultDir`): `?sort=title`
-
-Column mapping allows exposing different names in the API than the actual column names:
-
-```php
+// Column mapping: expose a public name, map to real column
 $config = new SortConfig(
     allowed: ['name' => 'user_name', 'date' => 'created_at'],
     default: ['name'],
 );
 
-// ?sort=date:desc → ORDER BY created_at DESC
-$sort = $config->resolve($queryParams);
+// Locked direction: the mapping includes :dir, user cannot override it
+$config = new SortConfig(
+    allowed: ['status' => 'create_time:desc'],
+    default: ['status'],
+);
+
+// Multi-column mapping: one public name maps to multiple ORDER BY columns
+$config = new SortConfig(
+    allowed: ['status' => ['status', 'create_time:desc']],
+    default: ['status'],
+);
 ```
+
+#### Direction control: free vs. locked
+
+The direction is determined by the **presence of `:dir` in the mapping value**:
+
+| Mapping value              | Direction  | Description                                                                          |
+|----------------------------|------------|--------------------------------------------------------------------------------------|
+| `'column'` (no dir)        | **Free**   | User chooses with `?sort=col:asc` or `:desc`. Falls back to `defaultDir` if omitted. |
+| `'column:desc'` (with dir) | **Locked** | Direction is fixed. User's requested direction is ignored.                           |
+
+For multi-column mappings, each column follows its own rule:
+
+```php
+$config = new SortConfig(
+    allowed: [
+        'create_time' => 'review_id',                     // free direction
+        'status' => ['status', 'create_time:desc'],        // status=free, create_time=locked DESC
+    ],
+    default: ['create_time:desc'],
+    defaultDir: 'asc',
+);
+```
+
+| User request            | Generated ORDER BY                       | Explanation                                    |
+|-------------------------|------------------------------------------|------------------------------------------------|
+| `?sort=create_time:asc` | `ORDER BY review_id ASC`                 | Free: user direction applied                   |
+| `?sort=create_time`     | `ORDER BY review_id ASC`                 | Free: `defaultDir` (asc) applied               |
+| `?sort=status:asc`      | `ORDER BY status ASC, create_time DESC`  | status=free (asc), create_time=locked (desc)   |
+| `?sort=status:desc`     | `ORDER BY status DESC, create_time DESC` | status=free (desc), create_time=locked (desc)  |
+| `?sort=status`          | `ORDER BY status ASC, create_time DESC`  | status=free (`defaultDir`), create_time=locked |
+| `?sort=unknown`         | `ORDER BY review_id DESC`                | Invalid: falls back to default                 |
+| *(no param)*            | `ORDER BY review_id DESC`                | No param: falls back to default                |
+
+#### Default sort format
+
+Default sort items use the `column:dir` string format. Each item must match a key in `allowed`:
+
+```php
+// Single default
+$config = new SortConfig(allowed: ['title', 'id'], default: ['title']);
+
+// With explicit direction
+$config = new SortConfig(allowed: ['title', 'id'], default: ['title:desc']);
+
+// Multi-column default
+$config = new SortConfig(allowed: ['title', 'id'], default: ['title', 'id:desc']);
+```
+
+#### Supported URL formats
+
+- Single: `?sort=title:asc`
+- Multiple: `?sort[]=title:asc&sort[]=id:desc`
+- Without direction (uses `defaultDir`): `?sort=title`
 
 ### Custom Sort Implementations
 
@@ -540,7 +589,8 @@ These shortcut methods do not affect the `QueryBuilder` instance, so it remains 
 
 ## 🔒 Locking Rows
 
-Use the `$lock` parameter on fetch methods to acquire a `FOR UPDATE` lock on selected rows. This is useful for preventing concurrent modifications in transactional contexts.
+Use the `$lock` parameter on fetch methods to acquire a `FOR UPDATE` lock on selected rows. This is useful for
+preventing concurrent modifications in transactional contexts.
 
 ```php
 $connection->beginTransaction();
@@ -563,9 +613,11 @@ Available on:
 * `fetchAll(bool $lock = false)`
 * `fetchColumn(int $column = 0, bool $lock = false)`
 
-> ⚠️ **Warning**: Locking requires an active transaction. The lock is released when the transaction is committed or rolled back.
+> ⚠️ **Warning**: Locking requires an active transaction. The lock is released when the transaction is committed or
+> rolled back.
 
-> 💡 **Tip**: On databases that support it (MySQL 8+, PostgreSQL), `SKIP LOCKED` is automatically added to avoid blocking on already-locked rows.
+> 💡 **Tip**: On databases that support it (MySQL 8+, PostgreSQL), `SKIP LOCKED` is automatically added to avoid blocking
+> on already-locked rows.
 
 ---
 
@@ -573,7 +625,8 @@ Available on:
 
 > 🆕 **Info**: *Since version 1.3*
 
-The `QueryBuilder` provides a `paginate()` method that integrates directly with the [Pagination](pagination.md) component. It automatically handles limit/offset and returns a pagination object.
+The `QueryBuilder` provides a `paginate()` method that integrates directly with the [Pagination](pagination.md)
+component. It automatically handles limit/offset and returns a pagination object.
 
 ```php
 use Hector\Pagination\Request\OffsetPaginationRequest;
@@ -612,11 +665,11 @@ $pagination->getTotalPages();  // 77
 
 ### Supported Request Types
 
-| Request Type                | Returns              |
-|-----------------------------|----------------------|
-| `OffsetPaginationRequest`   | `OffsetPagination`   |
-| `CursorPaginationRequest`   | `CursorPagination`   |
-| `RangePaginationRequest`    | `RangePagination`    |
+| Request Type              | Returns            |
+|---------------------------|--------------------|
+| `OffsetPaginationRequest` | `OffsetPagination` |
+| `CursorPaginationRequest` | `CursorPagination` |
+| `RangePaginationRequest`  | `RangePagination`  |
 
 ```php
 use Hector\Pagination\Request\CursorPaginationRequest;
@@ -634,4 +687,5 @@ $pagination = $queryBuilder
 $pagination->getNextPosition();  // ['id' => 62]
 ```
 
-> 💡 **Tip**: See the [Pagination documentation](pagination.md) for details on pagination types, navigators, and response preparation.
+> 💡 **Tip**: See the [Pagination documentation](pagination.md) for details on pagination types, navigators, and response
+> preparation.
