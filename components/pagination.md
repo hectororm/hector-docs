@@ -486,6 +486,31 @@ $request = CursorPaginationRequest::fromCursor(
 );
 ```
 
+#### Backward navigation (previous page)
+
+Cursor pagination supports navigating to previous pages. The `CursorPaginationNavigator` handles this automatically by encoding the direction in the cursor:
+
+```php
+use Hector\Pagination\Navigator\CursorPaginationNavigator;
+
+$navigator = new CursorPaginationNavigator($pagination);
+
+$nextRequest = $navigator->getNextRequest();     // Forward navigation
+$prevRequest = $navigator->getPreviousRequest(); // Backward navigation (direction encoded)
+
+$prevRequest->isBackward(); // true
+```
+
+When using `CursorPaginationUriBuilder`, the direction is transparently encoded in the cursor token. No additional query parameters are needed:
+
+```php
+$prevUri = $navigator->getPreviousUri($baseUri);
+// ?cursor=eyJpZCI6NiwiX19kaXJlY3Rpb24iOiJiYWNrd2FyZCJ9&per_page=20
+// The direction is embedded in the cursor — the URL stays clean.
+```
+
+The paginator (both `QueryCursorPaginator` and `BuilderCursorPaginator`) automatically detects backward requests, reverses the query direction, and returns results in the correct order.
+
 ### RangePaginationRequest
 
 ```php
