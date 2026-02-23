@@ -113,6 +113,55 @@ $queryBuilder
     ->orWhere('field', '>=', 10);
 ```
 
+### Grouped Conditions
+
+You can pass a `Closure` to `where()` or `having()` to create grouped conditions wrapped in parentheses. The closure
+receives a `Conditions` object (`Hector\Query\Statement\Conditions`) as its first argument, which exposes the same
+`where()` / `having()` methods:
+
+```php
+use Hector\Query\Statement\Conditions;
+
+$queryBuilder
+    ->from('users')
+    ->where(function (Conditions $conditions): void {
+        $conditions->where('age', '>=', 18);
+        $conditions->orWhere('role', 'admin');
+    })
+    ->where('active', true);
+// WHERE ( age >= ? OR role = ? ) AND active = ?
+```
+
+This is useful for combining `OR` conditions without affecting the rest of the query:
+
+```php
+$queryBuilder
+    ->from('products')
+    ->where('in_stock', true)
+    ->where(function (Conditions $conditions): void {
+        $conditions->where('category', 'electronics');
+        $conditions->orWhere('price', '<', 10);
+    });
+// WHERE in_stock = ? AND ( category = ? OR price < ? )
+```
+
+The same pattern works with `orWhere()`, `having()`, and `orHaving()`:
+
+```php
+$queryBuilder
+    ->from('orders')
+    ->column('customer_id')
+    ->column('SUM(amount)', 'total')
+    ->groupBy('customer_id')
+    ->having(function (Conditions $conditions): void {
+        $conditions->having('total', '>', 1000);
+        $conditions->orHaving('total', '<', 100);
+    });
+// HAVING ( total > ? OR total < ? )
+```
+
+> 💡 **Tip**: Type-hinting the closure parameter as `Conditions` enables full autocompletion in your IDE.
+
 ### Condition Shortcuts
 
 Several convenience methods are provided:

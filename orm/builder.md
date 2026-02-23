@@ -209,6 +209,25 @@ MyEntity::query()->whereEquals([
 
 Automatically uses `=` for scalar values and `IN` for arrays.
 
+### Grouped Conditions
+
+Pass a `Closure` to `where()` or `having()` to create grouped (parenthesized) conditions:
+
+```php
+use Hector\Query\Statement\Conditions;
+
+MyEntity::query()
+    ->where(function (Conditions $conditions): void {
+        $conditions->where('status', 'active');
+        $conditions->orWhere('role', 'admin');
+    })
+    ->where('verified', true)
+    ->all();
+// WHERE ( status = ? OR role = ? ) AND verified = ?
+```
+
+> 💡 **Tip**: Type-hinting the closure parameter as `Conditions` enables full autocompletion in your IDE.
+
 ---
 
 ## 📄 Pagination
