@@ -3,15 +3,22 @@ breadcrumb:
 - Components
 - Data Types
 summary-order: ;3
+keywords:
+  - types
+  - casting
+  - datetime
+  - json
+  - enum
+  - uuid
+  - boolean
 ---
 
-# 🎯 Data types
+# 🎯 Data Types
 
-> ℹ️ **Note**: While data types are part of the **Hector ORM** ecosystem, they are available as a standalone package:
-> [`hectororm/data-types`](https://github.com/hectororm/data-types).
-> You can find it on
-> [Packagist](https://packagist.org/packages/hectororm/data-types).
-> You can use them independently of the ORM, in any PHP application. 🎉
+> ℹ️ **Note**: While the Data Types component is part of the **Hector ORM** ecosystem, it is available as a standalone
+> package: [`hectororm/data-types`](https://github.com/hectororm/data-types).
+> You can find it on [Packagist](https://packagist.org/packages/hectororm/data-types).
+> You can use it independently of the ORM, in any PHP application. 🎉
 
 Data types allow automatic conversion between database values and PHP objects or primitives. This abstraction
 facilitates cleaner entity code and ensures consistent handling of complex or custom types, such as enums, UUIDs, or
@@ -24,7 +31,7 @@ Each type supports **bidirectional conversion**:
 
 ---
 
-## 🔍 Overview
+## Overview
 
 | Type             | Description                              | Key Arguments           |
 |------------------|------------------------------------------|-------------------------|
@@ -40,7 +47,7 @@ Each type supports **bidirectional conversion**:
 
 ---
 
-## 🧩 Built-in types
+## Built-in types
 
 ### BooleanType
 
@@ -83,7 +90,8 @@ Converts formatted date/time strings to `DateTimeInterface` instances and back.
 
 Maps string or integer values from the database to backed PHP enums.
 
-> ⚠️ **Warning**: Requires PHP 8.1+ and a [backed enum](https://www.php.net/manual/en/language.enumerations.backed.php) (with `string` or `int` backing type).
+> ⚠️ **Warning**: Requires PHP 8.1+ and
+> a [backed enum](https://www.php.net/manual/en/language.enumerations.backed.php) (with `string` or `int` backing type).
 
 #### Arguments
 
@@ -228,12 +236,12 @@ Converts UUIDs from and to `Ramsey\Uuid\UuidInterface` instances.
 #### Conversion
 
 | DB (hexadecimal)                     | PHP value               |
-| ------------------------------------ | ----------------------- |
+|--------------------------------------|-------------------------|
 | `'b40c5c6ae2a44b5c990b5feacdbdbe68'` | `Uuid::fromString(...)` |
 
 ---
 
-## 🧑‍💻 Custom type
+## Custom type
 
 Define your own data type by implementing `Hector\DataTypes\Type\TypeInterface`, or extending
 `Hector\DataTypes\Type\AbstractType`.
@@ -293,8 +301,16 @@ class Product extends Entity {
 
 ---
 
-## 🛠️ Global best practices
+## Global best practices
 
 * ✅ Always match DB column names to declared types.
 * ✅ Validate that your database contains values compatible with the declared type.
 * ⚠️ Attribute must be declared at the **class level**, not on properties.
+
+---
+
+## Installation
+
+```bash
+composer require hectororm/data-types
+```

@@ -3,6 +3,13 @@ breadcrumb:
   - ORM
   - Advanced configuration
 summary-order: 2;1
+keywords:
+  - configuration
+  - attributes
+  - table
+  - type
+  - mapper
+  - hidden
 ---
 
 # ⚙️ Advanced configuration
@@ -10,7 +17,7 @@ summary-order: 2;1
 **Hector ORM** allows you to configure advanced entity behaviors using PHP attributes. These attributes can be applied
 to your entity classes to control relationships, column visibility, table mapping, type casting, and other behaviors.
 
-## 🔧 OrmFactory Options
+## OrmFactory options
 
 When initializing the ORM via `OrmFactory::orm()`, you can pass the following options:
 
@@ -65,12 +72,12 @@ $orm = OrmFactory::orm(
 
 ---
 
-## 🔗 Relationships
+## Relationships
 
 See the [Relationships](relationships.md) section for how to declare `OneToOne`, `OneToMany`, `ManyToOne`, and
 `ManyToMany` associations using dedicated attributes.
 
-## 🎯 Specify Column Types
+## Specify column types
 
 Use the `Hector\Orm\Attributes\Type` attribute on the class to define the type of a column and pass optional arguments.
 The `type` must implement `TypeInterface`.
@@ -105,7 +112,7 @@ class PriceType extends AbstractType {
 
 ---
 
-## 🙈 Hide Columns from Output
+## Hide columns from output
 
 Use the `Hector\Orm\Attributes\Hidden` attribute on the class to hide specific columns from serialized outputs (e.g.
 JSON). This attribute is repeatable.
@@ -127,11 +134,12 @@ class User extends MagicEntity {
 
 ---
 
-## 🔑 Define a Primary Column
+## Define a primary column
 
 Use the `Hector\Orm\Attributes\Primary` attribute on the class to designate one or more columns as the primary key.
 
 This attribute is only necessary when the schema does not already declare the primary key, such as:
+
 - Database views (no intrinsic primary key)
 - Tables without explicit `PRIMARY KEY` constraint
 - Legacy databases with incomplete schema
@@ -159,7 +167,7 @@ class OrderLine extends MagicEntity {}
 
 ---
 
-## 🏷️ Set Custom Table and Schema Names
+## Set custom table and schema names
 
 By default, the entity class name is used as the table name. If your database table name differs from the entity class
 name, or if you're working with multiple schemas/databases, you can override this behavior using the
@@ -190,9 +198,10 @@ names.
 
 ---
 
-## 🔢 Default Ordering
+## Default ordering
 
-Use the `Hector\Orm\Attributes\OrderBy` attribute on the class to define a default sort order for queries on this entity. This attribute is repeatable to support multi-column sorting.
+Use the `Hector\Orm\Attributes\OrderBy` attribute on the class to define a default sort order for queries on this
+entity. This attribute is repeatable to support multi-column sorting.
 
 **Example:**
 
@@ -207,16 +216,16 @@ class Post extends MagicEntity {}
 
 In this example, all queries on `Post` will be sorted by `created_at DESC`, then by `name ASC` by default.
 
-| Parameter | Type    | Required | Description                              |
-|-----------|---------|----------|------------------------------------------|
-| `column`  | string  | Yes      | Column name to sort by                   |
-| `order`   | string  | No       | Sort direction (`ASC` or `DESC`)         |
+| Parameter | Type   | Required | Description                      |
+|-----------|--------|----------|----------------------------------|
+| `column`  | string | Yes      | Column name to sort by           |
+| `order`   | string | No       | Sort direction (`ASC` or `DESC`) |
 
 > 💡 **Tip**: You can override the default order in any query using `orderBy()` on the builder.
 
 ---
 
-## 🧩 Specify a Custom Mapper
+## Specify a custom mapper
 
 Use the `Hector\Orm\Attributes\Mapper` attribute on the class to associate a custom mapper. The given class must
 implement `MapperInterface`.

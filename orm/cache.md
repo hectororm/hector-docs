@@ -3,6 +3,11 @@ breadcrumb:
   - ORM
   - Cache
 summary-order: ;2
+keywords:
+  - cache
+  - psr-16
+  - schema
+  - performance
 ---
 
 # 💾 Cache
@@ -47,7 +52,7 @@ By default, if no cache is provided, Hector ORM falls back to a lightweight in-m
 
 ---
 
-## Cache Invalidation
+## Cache invalidation
 
 The cache should be invalidated whenever your database schema changes (e.g., after running migrations).
 
@@ -61,7 +66,7 @@ $cache->clear();
 
 ---
 
-## Using In-Memory Cache Explicitly
+## Using in-memory cache explicitly
 
 If you want to disable persistent caching entirely (useful for testing):
 

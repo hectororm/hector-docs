@@ -3,15 +3,21 @@ breadcrumb:
   - Components
   - Collection
 summary-order: ;2
+keywords:
+  - collection
+  - lazy
+  - filter
+  - map
+  - sort
+  - array
 ---
 
 # 📂 Collection
 
-> ℹ️ **Note**: While collection are part of the **Hector ORM** ecosystem, they are available as a standalone package:
-> [`hectororm/collection`](https://github.com/hectororm/collection).
-> You can find it on
-> [Packagist](https://packagist.org/packages/hectororm/collection).
-> You can use them independently of the ORM, in any PHP application. 🎉
+> ℹ️ **Note**: While the Collection component is part of the **Hector ORM** ecosystem, it is available as a standalone
+> package: [`hectororm/collection`](https://github.com/hectororm/collection).
+> You can find it on [Packagist](https://packagist.org/packages/hectororm/collection).
+> You can use it independently of the ORM, in any PHP application. 🎉
 
 Working with arrays in PHP is simple, but when it comes to chaining operations like filtering, mapping, or sorting, code
 can quickly become verbose and harder to read. **Hector ORM** introduces a powerful abstraction: **collections** —
@@ -29,9 +35,22 @@ Two types of collections are available:
   efficiently. Its values are generated on the fly, which makes it ideal when working with streams or when you want to
   avoid unnecessary memory usage.
 
+### Which one should I use?
+
+| Scenario                                                     | Use              |
+|--------------------------------------------------------------|------------------|
+| Small dataset that fits in memory (< 10k items)              | `Collection`     |
+| Need to count, reuse, or iterate multiple times              | `Collection`     |
+| Large dataset or unknown size (files, API pages, DB streams) | `LazyCollection` |
+| Expensive transformations that may not all be needed         | `LazyCollection` |
+| Need `append()`, `prepend()`, or other mutation methods      | `Collection`     |
+
+> 💡 **Tip**: You can convert between the two at any time: `$lazy->collect()` materializes a `LazyCollection` into a
+> `Collection`, and `$collection->lazy()` creates a `LazyCollection` from an existing `Collection`.
+
 ---
 
-## 🎓 Creating Collections
+## Creating Collections
 
 ```php
 use Hector\Collection\Collection;
@@ -46,7 +65,7 @@ $lazy = new LazyCollection(['my', 'initial', 'array']);
 
 All collections implement `CollectionInterface`. Only `Collection` is `Countable`.
 
-## 🔍 `CollectionInterface` Methods
+## Common methods
 
 ### `static::new(iterable|Closure $iterable): static`
 
@@ -436,7 +455,7 @@ $collection->groupBy(fn($item) => $item['name'][0])->getArrayCopy();
 
 ---
 
-## 🔍 `Collection` Additional Methods
+## `Collection`-only methods
 
 ### `append(mixed ...$values): static`
 
@@ -466,7 +485,7 @@ $lazy = $collection->lazy();
 
 ---
 
-## 🧵 `LazyCollection`
+## `LazyCollection`
 
 `LazyCollection` uses PHP generators to stream data efficiently, deferring evaluation until it's needed. Lazy
 collections are ideal when working with large datasets or expensive operations.
@@ -504,7 +523,7 @@ $standard = $mapped->collect();     // => Hector\Collection\Collection
 $lazyAgain = $standard->lazy();     // => LazyCollection
 ```
 
-### 💡 Common Use Cases
+### Common use cases
 
 Lazy collections are especially useful for:
 
@@ -553,7 +572,7 @@ Lazy collections are especially useful for:
 
 ---
 
-## 💡 Usage Examples
+## Usage examples
 
 ### Filtering user input
 
@@ -607,4 +626,12 @@ Suppose you have a list of invoices and want to compute the total and average am
 $invoices = Collection::new($invoicingService->all());
 $total = $invoices->column('amount')->sum();
 $average = $invoices->column('amount')->avg();
+```
+
+---
+
+## Installation
+
+```bash
+composer require hectororm/collection
 ```

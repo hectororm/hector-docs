@@ -3,6 +3,13 @@ breadcrumb:
   - ORM
   - Relationships
 summary-order: ;5
+keywords:
+  - relationships
+  - has-one
+  - has-many
+  - belongs-to
+  - many-to-many
+  - eager-loading
 ---
 
 # 🔗 Relationships
@@ -11,7 +18,7 @@ This guide presents all relationship types in **Hector ORM** using named paramet
 polymorphic handling, and advanced querying via builders. It also provides contextual explanations to help you
 understand when and how to use each feature.
 
-## 📋 Overview of attributes
+## Overview of attributes
 
 **Hector ORM** provides four attributes to declare entity relationships. These attributes are declared as PHP attributes
 and support named parameters.
@@ -48,7 +55,7 @@ These optional named parameters can be used to filter or shape the relationship:
 
 ---
 
-## 1️⃣ One-to-One / Many-to-One
+## One-to-One / Many-to-One
 
 A `HasOne` relationship indicates that the current entity is linked to one instance of another entity. When used with
 `BelongsTo`, it defines the inverse side of the relation.
@@ -83,7 +90,7 @@ Use filtering parameters directly to restrict results statically (e.g. only acti
 
 ---
 
-## 📚 One-to-Many
+## One-to-Many
 
 A `HasMany` relationship allows a single entity to reference multiple target entities. This is typically used for
 collections.
@@ -111,7 +118,7 @@ class User extends MagicEntity {}
 
 ---
 
-## 🔀 Many-to-Many
+## Many-to-Many
 
 A `BelongsToMany` relationship is used when an entity is related to many others, and vice versa, through a pivot table.
 
@@ -141,7 +148,7 @@ class User extends MagicEntity {}
 
 ---
 
-## 🔷 Polymorphic Relationships
+## Polymorphic relationships
 
 Polymorphic relations allow one entity to reference several types of targets. These are
 defined by using multiple relationship attributes with different names, filtered by a discriminator column.
@@ -200,7 +207,7 @@ if ($comment->commentable_type === 'article') {
 
 ---
 
-## 🔍 Accessing Relations
+## Accessing relations
 
 After declaration, relationships are directly accessible as properties (if using `MagicEntity`).
 
@@ -235,7 +242,7 @@ class User extends Entity {
 
 ---
 
-## ⚡ Eager Loading
+## Eager loading
 
 Use `with()` to preload relationships and avoid the N+1 query problem.
 
@@ -248,9 +255,9 @@ $users = User::query()->with(['posts' => ['comments', 'author']])->all();
 
 ---
 
-## 💾 Persisting Relations
+## Persisting relations
 
-### Assigning Relations
+### Assigning relations
 
 With `MagicEntity`, you can assign relations directly as properties:
 
@@ -272,7 +279,7 @@ With classic `Entity`, use `getRelated()->set()`:
 $user->getRelated()->set('profile', $profile);
 ```
 
-### Saving New Relations
+### Saving new relations
 
 When assigning **new** (not yet persisted) entities, the ORM automatically detects they need to be saved:
 
@@ -286,7 +293,7 @@ $user->profile = $profile;
 $user->save(); // Profile is automatically saved (new entity detected)
 ```
 
-### Saving Modified Relations
+### Saving modified relations
 
 For **existing** (already persisted) relations that have been modified, use `save(cascade: true)`:
 
@@ -297,9 +304,10 @@ $user->profile->bio = 'Updated bio'; // Modify existing relation
 $user->save(cascade: true); // Required to persist changes on existing relations
 ```
 
-> 💡 **Tip**: `save(cascade: true)` is only necessary when modifying already-persisted related entities. For new relations, a simple `save()` is sufficient.
+> 💡 **Tip**: `save(cascade: true)` is only necessary when modifying already-persisted related entities. For new
+> relations, a simple `save()` is sufficient.
 
-### Working with Collections
+### Working with collections
 
 ```php
 $user = User::find(1);
@@ -313,7 +321,7 @@ $user->posts[0]->title = 'Updated title';
 $user->save(cascade: true); // Required for existing entity
 ```
 
-### Removing Relations
+### Removing relations
 
 ```php
 // Clear a One-to-One / Many-to-One relation
@@ -331,11 +339,12 @@ $user->getRelated()->unset('roles');
 
 ---
 
-## 📊 Pivot Data (Many-to-Many)
+## Pivot Data (Many-to-Many)
 
-When working with `BelongsToMany` relationships, you often need to access additional columns from the pivot table (e.g., timestamps, quantities, or status flags). Use `getPivot()` to retrieve this data.
+When working with `BelongsToMany` relationships, you often need to access additional columns from the pivot table (e.g.,
+timestamps, quantities, or status flags). Use `getPivot()` to retrieve this data.
 
-### Accessing Pivot Data
+### Accessing pivot data
 
 ```php
 #[BelongsToMany(
@@ -378,13 +387,13 @@ foreach ($user->roles as $role) {
 
 ### PivotData API
 
-| Method                    | Return Type | Description                                      |
-|---------------------------|-------------|--------------------------------------------------|
-| `getKeys()`               | `array`     | Foreign key columns linking the two entities     |
-| `getData()`               | `array`     | Additional columns from the pivot table          |
-| `setData(array, bool)`    | `void`      | Set pivot data (second param: replace or merge)  |
+| Method                 | Return Type | Description                                     |
+|------------------------|-------------|-------------------------------------------------|
+| `getKeys()`            | `array`     | Foreign key columns linking the two entities    |
+| `getData()`            | `array`     | Additional columns from the pivot table         |
+| `setData(array, bool)` | `void`      | Set pivot data (second param: replace or merge) |
 
-### Modifying Pivot Data
+### Modifying pivot data
 
 ```php
 $role = $user->roles[0];
@@ -403,7 +412,7 @@ $user->save(cascade: true);
 
 ---
 
-## 🚫 Without Foreign Keys
+## Without foreign keys
 
 If your database does not enforce foreign keys, always declare column mappings manually.
 
@@ -418,7 +427,7 @@ class Employee extends MagicEntity {}
 
 ---
 
-## 🔧 Using Relationship Builders
+## Using relationship builders
 
 Relationship builders allow dynamic filtering or querying of related records:
 
@@ -436,21 +445,21 @@ $recentPosts = $builder
 
 ---
 
-## 🛠️ Utilities & Debugging
+## Utilities & debugging
 
 The `getRelated()` object gives access to utilities for managing relationships.
 
 ### API Reference
 
-| Method                    | Description                                      |
-|---------------------------|--------------------------------------------------|
-| `get(string $name)`       | Get related entity or collection (lazy-loads)    |
-| `set(string $name, $val)` | Assign a related entity or collection            |
-| `isset(string $name)`     | Check if relation is already loaded              |
-| `unset(string $name)`     | Clear cached relation (will reload on next access) |
-| `exists(string $name)`    | Check if relation is declared on entity          |
-| `getBuilder(string $name)`| Get a query builder for the relation             |
-| `save(bool $cascade)`     | Save all loaded relations                        |
+| Method                     | Description                                        |
+|----------------------------|----------------------------------------------------|
+| `get(string $name)`        | Get related entity or collection (lazy-loads)      |
+| `set(string $name, $val)`  | Assign a related entity or collection              |
+| `isset(string $name)`      | Check if relation is already loaded                |
+| `unset(string $name)`      | Clear cached relation (will reload on next access) |
+| `exists(string $name)`     | Check if relation is declared on entity            |
+| `getBuilder(string $name)` | Get a query builder for the relation               |
+| `save(bool $cascade)`      | Save all loaded relations                          |
 
 ### Examples
 
@@ -478,7 +487,7 @@ $freshPosts = $user->posts; // Reloads from DB
 
 ---
 
-## ✅ Best Practices
+## Best practices
 
 * Use named parameters for clarity and readability
 * Define `columns` explicitly in absence of foreign keys

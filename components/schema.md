@@ -2,39 +2,41 @@
 breadcrumb:
   - Components
   - Schema
-summary-order: ;5
+  - Overview
+summary-order: ;5;1
+keywords:
+  - schema
+  - introspection
+  - table
+  - column
+  - index
+  - foreign-key
 ---
 
 # 📏 Schema
 
-> ℹ️ **Note**: While schemas are part of the **Hector ORM** ecosystem, they are available as a standalone package:
-> [`hectororm/schema`](https://github.com/hectororm/schema).
-> You can find it on
-> [Packagist](https://packagist.org/packages/hectororm/schema).
-> You can use them independently of the ORM, in any PHP application. 🎉
+> ℹ️ **Note**: While the Schema component is part of the **Hector ORM** ecosystem, it is available as a standalone
+> package: [`hectororm/schema`](https://github.com/hectororm/schema).
+> You can find it on [Packagist](https://packagist.org/packages/hectororm/schema).
+> You can use it independently of the ORM, in any PHP application. 🎉
 
-**Hector Schema** is the schema introspection and metadata module of **Hector ORM**. It provides a simple and consistent API
-to explore and manage your database structure. While tightly integrated with **Hector ORM**, this package is entirely
-independent and can be used on its own.
+**Hector Schema** is the schema introspection and metadata module of **Hector ORM**. It provides a simple and consistent
+API to explore and manage your database structure. While tightly integrated with **Hector ORM**, this package is
+entirely independent and can be used on its own.
 
-## 🌐 DBMS Compatibility
+## DBMS compatibility
 
-| DBMS    | Version | Compatibility |
-|---------|:-------:|:-------------:|
-| MySQL   |   8.4   |       ✔       |
-| MySQL   |   8.0   |       ✔       |
-| MySQL   |   5.7   |       ✔       |
-| MariaDB |  11.7   |       ✔       |
-| MariaDB |  11.4   |       ✔       |
-| MariaDB |  10.11  |       ✔       |
-| MariaDB |  10.6   |       ✔       |
-| MariaDB |  10.5   |       ✔       |
-| Sqlite  |   3.x   |       ✔       |
+| DBMS    |   Version   | Compatibility |
+|---------|:-----------:|:-------------:|
+| MySQL   |  5.7 - 9.6  |       ✔       |
+| MariaDB | 10.5 - 12.2 |       ✔       |
+| Vitess  |      -      |       ✔       |
+| SQLite  |     3.x     |       ✔       |
 
 > ℹ️ **Note**: Versions listed are actively tested. Older versions may work but are not officially supported.
 > Know of a DBMS version not listed here but works fine? Contributions are welcome — open a PR!
 
-## 🔧 Usage
+## Usage
 
 ### Generate a schema
 
@@ -67,7 +69,7 @@ Available generators:
 
 > 💡 **Tip**: You can use different generators for different environments (e.g., dev SQLite, prod MySQL).
 
-### 📁 Caching schemas
+### Caching schemas
 
 Schema generation can be expensive for large databases. This library does **not** include built-in caching, as caching
 strategies vary widely.
@@ -89,7 +91,7 @@ flexible — ideal for integrating into your own caching logic 🌟
 
 ---
 
-## 📚 API Reference
+## API reference
 
 This section covers the main classes used to explore database schemas.
 
@@ -131,6 +133,9 @@ Represents a single schema (i.e., database).
 * `hasTable(string $name): bool`
 * `getTable(string $name): Table`
 * `getContainer(): ?SchemaContainer`
+
+> **Deprecated:** The `$quoted` parameter on `getName()` is deprecated. Use `Hector\Query\Statement\Quoted` for
+> driver-aware identifier quoting.
 
 > This class is also iterable: `foreach ($schema as $table)` yields `Hector\Schema\Table` objects.
 
@@ -175,6 +180,9 @@ Represents a table and its structure.
 
     * `getSchema(): Schema`
 
+> **Deprecated:** The `$quoted` parameter on `getSchemaName()`, `getName()`, `getFullName()`, and `getColumnsName()` is
+> deprecated. Use `Hector\Query\Statement\Quoted` for driver-aware identifier quoting.
+
 ### `Hector\Schema\Column`
 
 Represents a column in a table.
@@ -204,6 +212,9 @@ Represents a column in a table.
 
     * `getTable(): Table`
     * `isPrimary(): bool`
+
+> **Deprecated:** The `$quoted` parameter on `getName()` and `getFullName()` is deprecated. Use
+`Hector\Query\Statement\Quoted` for driver-aware identifier quoting.
 
 ### `Hector\Schema\Index`
 
@@ -236,9 +247,12 @@ Represents a foreign key constraint.
 * `getReferencedTable(): ?Table`
 * `getReferencedColumns(): Generator`
 
+> **Deprecated:** The `$quoted` parameter on `getColumnsName()` and `getReferencedColumnsName()` is deprecated. Use
+`Hector\Query\Statement\Quoted` for driver-aware identifier quoting.
+
 ---
 
-## 🎓 Example: Basic schema introspection
+## Example: basic schema introspection
 
 ```php
 $generator = new MySQL($connection);
@@ -275,3 +289,19 @@ foreach ($schema as $table) {
 
 This example will output the structure of your database with all tables, columns, indexes and foreign keys.
 Great for CLI tools, documentation generators or migration scripts! 📊
+
+---
+
+## Installation
+
+```bash
+composer require hectororm/schema
+```
+
+---
+
+## See also
+
+- [Plan](plan.md) — the DDL migration module included in this package. Build CREATE TABLE, ALTER TABLE, DROP TABLE
+  operations and compile them into SQL for MySQL/MariaDB and SQLite.
+- [Migration](migration.md) — orchestrate database migrations with providers, trackers and a runner.

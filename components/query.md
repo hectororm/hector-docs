@@ -3,21 +3,29 @@ breadcrumb:
   - Components
   - Query Builder
 summary-order: 3;1
+keywords:
+  - query-builder
+  - select
+  - insert
+  - update
+  - delete
+  - where
+  - join
+  - sort
 ---
 
 # 🔨 Query
 
-> ℹ️ **Note**: While query builder are part of the **Hector ORM** ecosystem, they are available as a standalone package:
-> [`hectororm/query`](https://github.com/hectororm/query).
-> You can find it on
-> [Packagist](https://packagist.org/packages/hectororm/query).
-> You can use them independently of the ORM, in any PHP application. 🎉
+> ℹ️ **Note**: While the Query Builder component is part of the **Hector ORM** ecosystem, it is available as a
+> standalone package: [`hectororm/query`](https://github.com/hectororm/query).
+> You can find it on [Packagist](https://packagist.org/packages/hectororm/query).
+> You can use it independently of the ORM, in any PHP application. 🎉
 
 The `QueryBuilder` in **Hector ORM** provides a fluent, object-oriented API to construct and execute SQL queries. It is
 designed to streamline the building of `SELECT`, `INSERT`, `UPDATE`, `DELETE`, and `UNION` queries, while maintaining
 control and readability in your codebase.
 
-## 🚀 Initialization
+## Initialization
 
 You can initialize the `QueryBuilder` using a `Connection` object. This setup allows you to immediately start crafting
 your queries.
@@ -36,7 +44,7 @@ $result = $queryBuilder
     ->fetchAll();
 ```
 
-## 🧱 Query Types
+## Query types
 
 The library provides specific classes for each query type. Each of these classes implements the `StatementInterface`,
 enabling you to manually build the query and bind parameters.
@@ -47,7 +55,7 @@ enabling you to manually build the query and bind parameters.
 * `Hector\Query\Delete`
 * `Hector\Query\Union`
 
-### 📌 Specifying the Table
+### Specifying the table
 
 Use `from()` to define the target table for your query:
 
@@ -65,7 +73,7 @@ $queryBuilder
     ->where('u.id', '=', 'p.user_id');
 ```
 
-### 🧪 Example
+### Example
 
 ```php
 use Hector\Connection\Bind\BindParamList;
@@ -86,7 +94,7 @@ $result = $connection->fetchAll($statement, $binds);
 
 ---
 
-## 🧮 Conditions
+## Conditions
 
 Both `WHERE` and `HAVING` clauses are supported using the same API. Simply switch the method prefix.
 
@@ -113,7 +121,7 @@ $queryBuilder
     ->orWhere('field', '>=', 10);
 ```
 
-### Grouped Conditions
+### Grouped conditions
 
 You can pass a `Closure` to `where()` or `having()` to create grouped conditions wrapped in parentheses. The closure
 receives a `Conditions` object (`Hector\Query\Statement\Conditions`) as its first argument, which exposes the same
@@ -162,7 +170,7 @@ $queryBuilder
 
 > 💡 **Tip**: Type-hinting the closure parameter as `Conditions` enables full autocompletion in your IDE.
 
-### Condition Shortcuts
+### Condition shortcuts
 
 Several convenience methods are provided:
 
@@ -222,7 +230,7 @@ Available:
 
 ---
 
-## 📋 Selecting Columns
+## Selecting columns
 
 You can customize the columns returned by your query:
 
@@ -238,7 +246,7 @@ $queryBuilder->columns(['id', 'name', 'created_at']);
 // SELECT id, name, created_at FROM users
 ```
 
-## 🧑‍🤝‍🧑 Grouping Results
+## Grouping results
 
 To group query results:
 
@@ -256,7 +264,7 @@ $queryBuilder->groupByWithRollup();
 // Adds WITH ROLLUP modifier (MySQL)
 ```
 
-## 🔢 Ordering Results
+## Ordering results
 
 Sort your result set with `orderBy()`:
 
@@ -272,14 +280,14 @@ $queryBuilder->random();
 // SELECT * FROM posts ORDER BY RAND()
 ```
 
-## 🔀 Sorting
+## Sorting
 
 > 🆕 **Info**: *Since version 1.3*
 
 The `Sort` namespace provides type-safe, composable sorting objects. This is especially useful when sort parameters come
 from user input (e.g. `?sort=title:desc`) and need to be validated before being applied to a query.
 
-### Sort Objects
+### Sort objects
 
 The `SortInterface` defines a single method: `apply(QueryBuilder $builder): void`. Two implementations are provided:
 
@@ -421,7 +429,7 @@ $config = new SortConfig(allowed: ['title', 'id'], default: ['title', 'id:desc']
 - Multiple: `?sort[]=title:asc&sort[]=id:desc`
 - Without direction (uses `defaultDir`): `?sort=title`
 
-### Custom Sort Implementations
+### Custom sort implementations
 
 Implement `SortInterface` for custom sorting logic:
 
@@ -452,7 +460,7 @@ class NullsLastSort implements SortInterface
 }
 ```
 
-## 📦 Limiting Results
+## Limiting results
 
 Control pagination using `limit()` and `offset()`:
 
@@ -462,7 +470,7 @@ $queryBuilder->offset(20);
 $queryBuilder->resetLimit();
 ```
 
-## 📝 Assigning Values
+## Assigning values
 
 When building `INSERT` or `UPDATE` queries, use:
 
@@ -485,7 +493,7 @@ $queryBuilder->assigns([
 
 You can also pass a `StatementInterface` to `assigns()` for more advanced use cases.
 
-## 🔗 Joins
+## Joins
 
 Join tables with the following methods:
 
@@ -499,7 +507,7 @@ $queryBuilder->resetJoin();
 
 ---
 
-## 🔀 Unions
+## Unions
 
 The `Union` class allows combining multiple `SELECT` queries:
 
@@ -516,7 +524,7 @@ $union->addSelect($select1, $select2);
 
 `Union` also implements `StatementInterface`, allowing you to bind and execute it like any other query.
 
-### Executing a Union
+### Executing a union
 
 ```php
 use Hector\Connection\Bind\BindParamList;
@@ -540,7 +548,7 @@ $union->all(); // UNION ALL instead of UNION
 
 ---
 
-## 📤 Fetching Results
+## Fetching results
 
 Use the following methods to retrieve data:
 
@@ -553,7 +561,7 @@ $queryBuilder->fetchColumn();   // Generator - specific column
 > 💡 **Tip**: `fetchAll()` and `fetchColumn()` return a `Generator`. Refer to PHP
 > documentation: [https://www.php.net/manual/en/class.generator.php](https://www.php.net/manual/en/class.generator.php)
 
-## 🔢 Counting Results
+## Counting results
 
 Quickly count the results of a query:
 
@@ -568,7 +576,7 @@ $rows = $queryBuilder->fetchAll();
 
 This method resets column selection, limit, and order, but does not mutate the original query builder.
 
-## 🔁 Distinct Values
+## Distinct values
 
 Use `distinct()` to eliminate duplicates:
 
@@ -579,7 +587,7 @@ $queryBuilder
     ->fetchAll();
 ```
 
-## ❓ Existence Check
+## Existence check
 
 Determine if any row matches the conditions:
 
@@ -594,7 +602,7 @@ Does not alter the query builder instance.
 
 ---
 
-## ✍️ Shortcuts for Insert / Update / Delete
+## Shortcuts for Insert / Update / Delete
 
 You can execute data manipulation directly:
 
@@ -617,7 +625,7 @@ You may also use a subquery for insert:
 $queryBuilder->insert((new Select())->from('source_table'));
 ```
 
-### Ignoring Duplicates
+### Ignoring duplicates
 
 Use `ignore()` to skip rows that would cause duplicate key violations:
 
@@ -636,7 +644,7 @@ These shortcut methods do not affect the `QueryBuilder` instance, so it remains 
 
 ---
 
-## 🔒 Locking Rows
+## Locking rows
 
 Use the `$lock` parameter on fetch methods to acquire a `FOR UPDATE` lock on selected rows. This is useful for
 preventing concurrent modifications in transactional contexts.
@@ -670,7 +678,7 @@ Available on:
 
 ---
 
-## 📄 Integrated Pagination
+## Integrated pagination
 
 > 🆕 **Info**: *Since version 1.3*
 
@@ -699,7 +707,7 @@ $pagination->hasMore();         // true/false
 $pagination->getTotal();        // null (not computed by default)
 ```
 
-### With Total Count
+### With total count
 
 Pass `withTotal: true` to compute the total count (requires an additional query):
 
@@ -712,7 +720,7 @@ $pagination->getTotal();       // 1523
 $pagination->getTotalPages();  // 77
 ```
 
-### Supported Request Types
+### Supported request types
 
 | Request Type              | Returns            |
 |---------------------------|--------------------|
@@ -738,3 +746,11 @@ $pagination->getNextPosition();  // ['id' => 62]
 
 > 💡 **Tip**: See the [Pagination documentation](pagination.md) for details on pagination types, navigators, and response
 > preparation.
+
+---
+
+## Installation
+
+```bash
+composer require hectororm/query
+```

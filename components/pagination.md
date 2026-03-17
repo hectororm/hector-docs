@@ -3,18 +3,25 @@ breadcrumb:
   - Components
   - Pagination
 summary-order: ;6
+keywords:
+  - pagination
+  - offset
+  - cursor
+  - range
+  - paginator
+  - psr-7
 ---
 
-# Pagination
+# 📄 Pagination
 
 > 🆕 **Info**: *Since version 1.3*
 
-> ℹ️ **Note**: While pagination is part of the **Hector ORM** ecosystem, it is available as a standalone package:
-> [`hectororm/pagination`](https://github.com/hectororm/pagination).
+> ℹ️ **Note**: While the Pagination component is part of the **Hector ORM** ecosystem, it is available as a standalone
+> package: [`hectororm/pagination`](https://github.com/hectororm/pagination).
 > You can find it on [Packagist](https://packagist.org/packages/hectororm/pagination).
 > You can use it independently of the ORM, in any PHP application. 🎉
 
-## Pagination Types
+## Pagination types
 
 | Type   | Class              | Use Case                                    |
 |--------|--------------------|---------------------------------------------|
@@ -22,9 +29,10 @@ summary-order: ;6
 | Cursor | `CursorPagination` | Keyset pagination for large datasets        |
 | Range  | `RangePagination`  | RFC 7233 style (Content-Range headers)      |
 
-## Quick Start
+## Quick start
 
-Paginators are the recommended way to handle pagination. They provide a unified API for request parsing, navigation, and response preparation.
+Paginators are the recommended way to handle pagination. They provide a unified API for request parsing, navigation, and
+response preparation.
 
 ### Offset Paginator
 
@@ -140,7 +148,7 @@ $response = $paginator->prepareResponse($response, $serverRequest->getUri(), $pa
 
 Navigators generate pagination requests and URIs for navigation links.
 
-### Using with Paginators
+### Using with paginators
 
 ```php
 $navigator = $paginator->createNavigator($pagination);
@@ -159,7 +167,7 @@ $nextUri = $navigator->getNextUri($baseUri);
 $lastUri = $navigator->getLastUri($baseUri);
 ```
 
-### Standalone Usage
+### Standalone usage
 
 ```php
 use Hector\Pagination\Navigator\OffsetPaginationNavigator;
@@ -212,7 +220,7 @@ $uri = $builder->buildUri($baseUri, $rangeRequest);
 // ?range=20-39
 ```
 
-## Pagination Classes
+## Pagination classes
 
 ### Offset Pagination
 
@@ -282,7 +290,6 @@ $pagination->getCursorName();      // 'my-cursor' or null
 $pagination->getTotal();           // 1000 or null
 ```
 
-
 To encode positions as URL-safe cursor strings, use a `CursorEncoderInterface`:
 
 ```php
@@ -315,7 +322,7 @@ $pagination->hasMore();         // true
 $pagination->hasPrevious();     // false
 ```
 
-## Cursor Encoders
+## Cursor encoders
 
 Cursors are encoded for safe URL transmission.
 
@@ -359,7 +366,8 @@ $paginator = new CursorPaginator(
 
 ### Encrypted Encoder
 
-Fully encrypted cursors using libsodium (`sodium_crypto_secretbox`). Provides confidentiality and integrity — cursor contents are hidden from clients.
+Fully encrypted cursors using libsodium (`sodium_crypto_secretbox`). Provides confidentiality and integrity — cursor
+contents are hidden from clients.
 
 > ⚠️ **Requires** the `sodium` PHP extension.
 
@@ -379,20 +387,22 @@ $position = $encoder->decode($cursor);
 ```
 
 Key requirements:
+
 - Must be exactly 32 bytes (`SODIUM_CRYPTO_SECRETBOX_KEYBYTES`)
 - Use `EncryptedCursorEncoder::generateKey()` to generate a valid key
 - Store the key securely (environment variable, secrets manager)
 
 Use cases:
+
 - Hide internal IDs or sensitive data in cursors
 - Prevent cursor inspection by clients
 - Stronger security than signed-only cursors
 
-## Cursor Storage
+## Cursor storage
 
 Store cursors server-side for short URLs and complex state.
 
-### Cache Storage (PSR-16)
+### Cache storage (PSR-16)
 
 ```php
 use Hector\Pagination\Storage\CacheCursorStorage;
@@ -414,7 +424,7 @@ $state = $storage->retrieve($name);
 $storage->delete($name);
 ```
 
-### Array Storage (testing)
+### Array storage (testing)
 
 ```php
 use Hector\Pagination\Storage\ArrayCursorStorage;
@@ -428,7 +438,7 @@ $storage->clear(); // Clear all stored cursors
 $storage->count(); // Get count of stored cursors
 ```
 
-## Pagination Requests
+## Pagination requests
 
 Request objects encapsulate pagination parameters from HTTP requests (PSR-7).
 
@@ -488,7 +498,8 @@ $request = CursorPaginationRequest::fromCursor(
 
 #### Backward navigation (previous page)
 
-Cursor pagination supports navigating to previous pages. The `CursorPaginationNavigator` handles this automatically by encoding the direction in the cursor:
+Cursor pagination supports navigating to previous pages. The `CursorPaginationNavigator` handles this automatically by
+encoding the direction in the cursor:
 
 ```php
 use Hector\Pagination\Navigator\CursorPaginationNavigator;
@@ -501,7 +512,8 @@ $prevRequest = $navigator->getPreviousRequest(); // Backward navigation (directi
 $prevRequest->isBackward(); // true
 ```
 
-When using `CursorPaginationUriBuilder`, the direction is transparently encoded in the cursor token. No additional query parameters are needed:
+When using `CursorPaginationUriBuilder`, the direction is transparently encoded in the cursor token. No additional query
+parameters are needed:
 
 ```php
 $prevUri = $navigator->getPreviousUri($baseUri);
@@ -509,7 +521,8 @@ $prevUri = $navigator->getPreviousUri($baseUri);
 // The direction is embedded in the cursor — the URL stays clean.
 ```
 
-The paginator (both `QueryCursorPaginator` and `BuilderCursorPaginator`) automatically detects backward requests, reverses the query direction, and returns results in the correct order.
+The paginator (both `QueryCursorPaginator` and `BuilderCursorPaginator`) automatically detects backward requests,
+reverses the query direction, and returns results in the correct order.
 
 ### RangePaginationRequest
 
@@ -540,7 +553,7 @@ $request->getOffset(); // 0
 $request->getLimit();  // 20
 ```
 
-## JSON Serialization
+## JSON serialization
 
 All pagination classes implement `JsonSerializable`.
 
@@ -609,3 +622,11 @@ Pagination classes validate constructor arguments and throw `InvalidArgumentExce
 | `OffsetPagination` | `$currentPage < 1` | `currentPage must be at least 1` |
 | `RangePagination`  | `$start < 0`       | `start must be >= 0`             |
 | `RangePagination`  | `$end < $start`    | `end must be >= start`           |
+
+---
+
+## Installation
+
+```bash
+composer require hectororm/pagination
+```

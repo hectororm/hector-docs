@@ -3,6 +3,13 @@ breadcrumb:
   - ORM
   - Builder
 summary-order: ;3
+keywords:
+  - builder
+  - query
+  - find
+  - where
+  - pagination
+  - orm
 ---
 
 # 🔧 Builder
@@ -10,7 +17,7 @@ summary-order: ;3
 The `Builder` provides a high-level, entity-oriented way to perform queries on your data models. It is built on top of
 the lower-level `QueryBuilder` and integrates deeply with **Hector ORM** entity management.
 
-## 🔍 Accessing the Builder
+## Accessing the builder
 
 You can access the builder using the static `Entity::query()` method, or instantiate it directly:
 
@@ -28,9 +35,22 @@ $builder = new Builder(MyEntity::class);
 > see [`hectororm/query`](https://github.com/hectororm/query) on GitHub
 > or [Packagist](https://packagist.org/packages/hectororm/query).
 
-## 🎯 Finding Entities
+## Finding entities
 
-### Find by Primary Key
+The builder provides several methods to retrieve entities. Here is a quick overview:
+
+| Method                         | Lookup by       | Returns      | If not found               |
+|--------------------------------|-----------------|--------------|----------------------------|
+| `find($pk)`                    | Primary key     | `?Entity`    | `null`                     |
+| `findOrFail($pk)`              | Primary key     | `Entity`     | Throws `NotFoundException` |
+| `findOrNew($pk, $defaults)`    | Primary key     | `Entity`     | New entity with defaults   |
+| `findAll($pk, ...)`            | Primary key(s)  | `Collection` | Empty collection           |
+| `get($offset)`                 | Result offset   | `?Entity`    | `null`                     |
+| `getOrFail($offset)`           | Result offset   | `Entity`     | Throws `NotFoundException` |
+| `getOrNew($offset, $defaults)` | Result offset   | `Entity`     | New entity with defaults   |
+| `all()`                        | *(all results)* | `Collection` | Empty collection           |
+
+### Find by primary key
 
 ```php
 $entity = MyEntity::find(1);
@@ -42,7 +62,7 @@ Returns the entity or `null` if not found.
 
 ---
 
-### Find All
+### Find all
 
 Returns a collection of entities matching the given primary key(s):
 
@@ -51,7 +71,7 @@ $collection = MyEntity::findAll(1);
 $collection = MyEntity::findAll(1, 2, 3);
 ```
 
-### Find or Fail
+### Find or fail
 
 Throws `NotFoundException` if not found:
 
@@ -65,7 +85,7 @@ try {
 }
 ```
 
-### Find or New
+### Find or new
 
 Returns existing entity or creates a new one with default values:
 
@@ -73,11 +93,12 @@ Returns existing entity or creates a new one with default values:
 $entity = MyEntity::findOrNew(1, ['foo' => 'value']);
 ```
 
-## 📊 Get by Offset (non-PK access)
+## Get by offset (non-PK access)
 
-These methods retrieve entities by their position in the result set (zero-based offset), not by primary key. Useful when you need the Nth result of a query.
+These methods retrieve entities by their position in the result set (zero-based offset), not by primary key. Useful when
+you need the Nth result of a query.
 
-### Get / Get or Fail / Get or New
+### Get / get or fail / get or new
 
 ```php
 // Get first result (offset 0)
@@ -95,7 +116,7 @@ $entity = MyEntity::query()->getOrNew(0, ['status' => 'draft']);
 
 ---
 
-## 📋 Retrieving All Entities
+## Retrieving all entities
 
 ```php
 $collection = MyEntity::all();
@@ -107,7 +128,7 @@ Also available via the builder:
 $collection = MyEntity::query()->all();
 ```
 
-## 🔄 Chunking and Yielding
+## Chunking and yielding
 
 Use `chunk()` for memory-friendly batch processing:
 
@@ -127,7 +148,8 @@ MyEntity::query()->chunk(100, function (Collection $collection) {
 }, lazy: false);
 ```
 
-Use `yield()` to iterate using a lazy generator. Entities are hydrated one by one as you iterate, minimizing memory usage:
+Use `yield()` to iterate using a lazy generator. Entities are hydrated one by one as you iterate, minimizing memory
+usage:
 
 ```php
 foreach (MyEntity::query()->yield() as $entity) {
@@ -135,11 +157,12 @@ foreach (MyEntity::query()->yield() as $entity) {
 }
 ```
 
-> 💡 **Tip**: `yield()` returns a `LazyCollection`. The underlying query is executed once, but entities are hydrated lazily during iteration.
+> 💡 **Tip**: `yield()` returns a `LazyCollection`. The underlying query is executed once, but entities are hydrated
+> lazily during iteration.
 
 ---
 
-## 🔢 Counting
+## Counting
 
 ```php
 $count = MyEntity::query()->count();
@@ -147,20 +170,20 @@ $count = MyEntity::query()->count();
 
 This will ignore any `limit()` that was previously applied.
 
-## 📦 Limiting and Offsetting Results
+## Limiting and offsetting results
 
 ```php
 MyEntity::query()->limit(10)->offset(5)->all();
 ```
 
-## 🔢 Ordering Results
+## Ordering results
 
 ```php
 MyEntity::query()->orderBy('created_at', 'DESC')->all();
 MyEntity::query()->orderBy('name')->all(); // ASC by default
 ```
 
-## 🧮 Conditions
+## Conditions
 
 You can filter entities using a fluent API similar to the `QueryBuilder`.
 
@@ -198,7 +221,7 @@ MyEntity::query()->whereExists($subQuery);
 MyEntity::query()->whereNotExists($subQuery);
 ```
 
-### Where Equals (Smart Inference)
+### Where equals (smart inference)
 
 ```php
 MyEntity::query()->whereEquals([
@@ -209,7 +232,7 @@ MyEntity::query()->whereEquals([
 
 Automatically uses `=` for scalar values and `IN` for arrays.
 
-### Grouped Conditions
+### Grouped conditions
 
 Pass a `Closure` to `where()` or `having()` to create grouped (parenthesized) conditions:
 
@@ -230,13 +253,14 @@ MyEntity::query()
 
 ---
 
-## 📄 Pagination
+## Pagination
 
 > 🆕 **Info**: *Since version 1.3*
 
-The `Builder` provides a `paginate()` method that returns paginated entity collections. It integrates with the [Pagination](../components/pagination.md) component.
+The `Builder` provides a `paginate()` method that returns paginated entity collections. It integrates with
+the [Pagination](../components/pagination.md) component.
 
-### Basic Usage
+### Basic usage
 
 ```php
 use Hector\Pagination\Request\OffsetPaginationRequest;
@@ -258,7 +282,7 @@ $pagination->getCurrentPage();  // 2
 $pagination->hasMore();         // true/false
 ```
 
-### With Total Count
+### With total count
 
 ```php
 $pagination = User::query()
@@ -269,7 +293,7 @@ $pagination->getTotal();       // 150
 $pagination->getTotalPages();  // 10
 ```
 
-### Cursor Pagination
+### Cursor pagination
 
 For large datasets, cursor pagination is more efficient:
 
@@ -293,19 +317,19 @@ $pagination->getNextPosition();     // ['id' => 120]
 $pagination->getPreviousPosition(); // ['id' => 100]
 ```
 
-### Supported Request Types
+### Supported request types
 
-| Request Type                | Returns              | Best For                    |
-|-----------------------------|----------------------|-----------------------------|
-| `OffsetPaginationRequest`   | `OffsetPagination`   | Traditional page navigation |
-| `CursorPaginationRequest`   | `CursorPagination`   | Large datasets, infinite scroll |
-| `RangePaginationRequest`    | `RangePagination`    | RFC 7233 style APIs         |
+| Request Type              | Returns            | Best For                        |
+|---------------------------|--------------------|---------------------------------|
+| `OffsetPaginationRequest` | `OffsetPagination` | Traditional page navigation     |
+| `CursorPaginationRequest` | `CursorPagination` | Large datasets, infinite scroll |
+| `RangePaginationRequest`  | `RangePagination`  | RFC 7233 style APIs             |
 
 > 💡 **Tip**: Unlike the raw `QueryBuilder`, the ORM `Builder` returns hydrated entity collections, not raw arrays.
 
 ---
 
-## 🔗 Compatibility with QueryBuilder
+## Compatibility with QueryBuilder
 
 All filtering, ordering, joining, and limiting operations are passed to the underlying `QueryBuilder`, which can be used
 directly for low-level control.
