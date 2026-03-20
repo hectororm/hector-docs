@@ -327,6 +327,34 @@ $pagination->getPreviousPosition(); // ['id' => 100]
 
 > 💡 **Tip**: Unlike the raw `QueryBuilder`, the ORM `Builder` returns hydrated entity collections, not raw arrays.
 
+### Query-level pagination (no ORM mapping)
+
+For optimized queries with complex JOINs, you can paginate at the SQL level using `paginateQuery()`. This bypasses ORM
+hydration and returns raw arrays — useful for 2-step pagination patterns:
+
+```php
+// Step 1: paginate IDs only (fast, no ORM mapping)
+$idsPagination = User::query()
+    ->resetColumns()
+    ->distinct()
+    ->column('id')
+    ->paginateQuery($request);
+
+// Step 2: load full entities by IDs
+$users = User::query()
+    ->whereIn('id', array_column($idsPagination->getArrayCopy(), 'id'))
+    ->all();
+
+// Step 3: replace items, keep pagination metadata
+$pagination = $idsPagination->withItems($users->getArrayCopy());
+```
+
+> ℹ️ **Note**: `paginateQuery()` delegates to the parent `QueryBuilder::paginate()`, using `QueryCursorPaginator`,
+> `QueryRangePaginator`, or `QueryOffsetPaginator` instead of their ORM counterparts.
+
+> 💡 **Tip**: Use `withItems()` from the [Pagination component](../components/pagination.md) to swap items immutably
+> while preserving all pagination metadata (positions, total, perPage, page).
+
 ---
 
 ## Compatibility with QueryBuilder
