@@ -599,47 +599,6 @@ All pagination classes implement `JsonSerializable`.
 }
 ```
 
-## Replacing items
-
-All pagination classes support immutable item replacement via `withItems()`. This creates a new pagination instance with
-different items while preserving all pagination metadata (positions, page, range, total, perPage).
-
-```php
-$pagination = new OffsetPagination(
-    items: $rawRows,
-    perPage: 20,
-    currentPage: 3,
-    total: 500,
-);
-
-// Replace items, keep metadata
-$newPagination = $pagination->withItems($transformedRows);
-
-$newPagination->getCurrentPage();  // 3 (preserved)
-$newPagination->getTotal();        // 500 (preserved)
-$newPagination->getPerPage();      // 20 (preserved)
-$newPagination->getArrayCopy();    // $transformedRows
-```
-
-This is useful for **2-step pagination** patterns where you paginate IDs first and load full objects separately:
-
-```php
-// Step 1: paginate IDs (raw rows)
-$idsPagination = $builder->paginateQuery($request);
-
-// Step 2: load full entities
-$entities = Entity::query()
-    ->whereIn('id', array_column($idsPagination->getArrayCopy(), 'id'))
-    ->all();
-
-// Step 3: replace items, keep pagination metadata
-$pagination = $idsPagination->withItems($entities->getArrayCopy());
-```
-
-> ℹ️ **Note**: `withItems()` is immutable — the original pagination object is not modified.
-
----
-
 ## Iteration
 
 All pagination classes are iterable and countable.

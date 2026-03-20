@@ -327,33 +327,34 @@ $pagination->getPreviousPosition(); // ['id' => 100]
 
 > 💡 **Tip**: Unlike the raw `QueryBuilder`, the ORM `Builder` returns hydrated entity collections, not raw arrays.
 
-### Query-level pagination (no ORM mapping)
+### Optimized pagination
 
-For optimized queries with complex JOINs, you can paginate at the SQL level using `paginateQuery()`. This bypasses ORM
-hydration and returns raw arrays — useful for 2-step pagination patterns:
+When using JOINs (especially `*ToMany` relationships), a single row per entity can be multiplied into several rows. This
+causes `LIMIT` to return fewer entities than expected. Pass `optimized: true` to fix this:
 
 ```php
-// Step 1: paginate IDs only (fast, no ORM mapping)
-$idsPagination = User::query()
-    ->resetColumns()
-    ->distinct()
-    ->column('id')
-    ->paginateQuery($request);
-
-// Step 2: load full entities by IDs
-$users = User::query()
-    ->whereIn('id', array_column($idsPagination->getArrayCopy(), 'id'))
-    ->all();
-
-// Step 3: replace items, keep pagination metadata
-$pagination = $idsPagination->withItems($users->getArrayCopy());
+$pagination = User::query()
+    ->where('orders.status', 'paid')       // auto-joins "orders" (1-to-many)
+    ->orderBy('created_at', 'DESC')
+    ->paginate($request, optimized: true);
 ```
 
-> ℹ️ **Note**: `paginateQuery()` delegates to the parent `QueryBuilder::paginate()`, using `QueryCursorPaginator`,
-> `QueryRangePaginator`, or `QueryOffsetPaginator` instead of their ORM counterparts.
+Under the hood, the paginator executes two queries:
 
-> 💡 **Tip**: Use `withItems()` from the [Pagination component](../components/pagination.md) to swap items immutably
-> while preserving all pagination metadata (positions, total, perPage, page).
+1. `SELECT DISTINCT pk FROM … JOIN … WHERE … ORDER BY … LIMIT …` — fetches only the paginated primary key values
+2. `SELECT * FROM … WHERE pk IN (…)` — loads full entities for those IDs
+
+Results are automatically reordered to match the original ORDER BY.
+
+This works with all three pagination types (offset, cursor, range) and is fully compatible with `withTotal: true`:
+
+```php
+$pagination = User::query()
+    ->where('orders.status', 'paid')
+    ->paginate($request, withTotal: true, optimized: true);
+```
+
+> ℹ️ **Note**: Optimized pagination requires the entity to have a primary key defined.
 
 ---
 
