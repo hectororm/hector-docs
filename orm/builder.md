@@ -339,12 +339,17 @@ $pagination = User::query()
     ->paginate($request, optimized: true);
 ```
 
-Under the hood, the paginator executes two queries:
+Under the hood, the paginator uses a single query with an INNER JOIN on a derived table:
 
-1. `SELECT DISTINCT pk FROM … JOIN … WHERE … ORDER BY … LIMIT …` — fetches only the paginated primary key values
-2. `SELECT * FROM … WHERE pk IN (…)` — loads full entities for those IDs
-
-Results are automatically reordered to match the original ORDER BY.
+```sql
+SELECT main.*
+FROM entity AS main
+INNER JOIN (
+    SELECT DISTINCT main.pk FROM entity AS main
+    JOIN … WHERE … ORDER BY … LIMIT …
+) AS pagination ON (main.pk = pagination.pk)
+ORDER BY …
+```
 
 This works with all three pagination types (offset, cursor, range) and is fully compatible with `withTotal: true`:
 
