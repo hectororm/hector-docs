@@ -253,6 +253,10 @@ $users = User::query()->with(['profile', 'posts'])->all();
 $users = User::query()->with(['posts' => ['comments', 'author']])->all();
 ```
 
+> **See also**: You can filter entities through their relationships using dot notation in conditions (e.g.
+> `where('relation.column', value)` or `where('relation1.relation2.column', value)`).
+> See [Filtering through relationships](builder.md#filtering-through-relationships) in the Builder documentation.
+
 ---
 
 ## Persisting relations
