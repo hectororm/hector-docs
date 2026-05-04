@@ -251,6 +251,57 @@ MyEntity::query()
 
 > 💡 **Tip**: Type-hinting the closure parameter as `Conditions` enables full autocompletion in your IDE.
 
+### Filtering through relationships
+
+You can filter entities based on columns from related entities by using dot notation in your conditions. The ORM
+automatically resolves the relationship, generates the required `LEFT JOIN` and adds `DISTINCT` to avoid duplicate rows.
+
+#### Single-level relationship
+
+Use `'relationship.column'` to filter through a direct relationship:
+
+```php
+// Find all films where the language name is 'French'
+Film::query()->where('language.name', 'French')->all();
+```
+
+This generates a `LEFT JOIN` on the `language` table and applies the condition on the joined table.
+
+#### Multi-level relationships
+
+You can chain relationships to filter through deeper levels using `'relation1.relation2.column'`:
+
+```php
+// Find all staff members whose address is in a specific city
+Staff::query()->where('address.city.city', 'Paris')->all();
+```
+
+This generates two `LEFT JOIN` clauses (one for `address`, one for `city`) and applies the condition on the final
+joined table.
+
+#### Combining multiple conditions on relationships
+
+All condition methods work with relationship dot notation: `orWhere`, `whereIn`, `whereBetween`, etc.
+
+```php
+Staff::query()
+    ->where('address.city.city', 'Paris')
+    ->where('address.city.country_id', 1)
+    ->all();
+```
+
+You can also use grouped conditions with closures:
+
+```php
+Film::query()->where(function (Conditions $conditions): void {
+    $conditions->where('language.name', 'French');
+    $conditions->orWhere('language.name', 'Italian');
+})->all();
+```
+
+> **Note**: When the same relationship path is referenced in multiple conditions, the `LEFT JOIN` is generated only once.
+> `DISTINCT` is automatically applied to the query to prevent duplicate results caused by the join.
+
 ---
 
 ## Pagination
@@ -360,6 +411,48 @@ $pagination = User::query()
 ```
 
 > ℹ️ **Note**: Optimized pagination requires the entity to have a primary key defined.
+
+### Chunk paginate
+
+Use `chunkPaginate()` to iterate through all pages automatically. The callback receives each page as a
+`PaginationInterface` containing a `Collection` of entities; return `false` to stop early.
+
+```php
+use Hector\Pagination\Request\CursorPaginationRequest;
+
+Post::query()
+    ->orderBy('id')
+    ->chunkPaginate(
+        new CursorPaginationRequest(perPage: 100),
+        function ($pagination) {
+            foreach ($pagination as $post) {
+                // Process each entity...
+            }
+        },
+    );
+```
+
+This is more efficient than `chunk(lazy: false)` for large datasets because each page starts where the previous one
+left off, avoiding the O(n²) cost of large LIMIT/OFFSET queries.
+
+Like `paginate()`, `chunkPaginate()` accepts the `optimized` parameter. This is important when your query involves
+`*ToMany` JOINs: without it, a `LIMIT 100` may return fewer than 100 entities because each entity with N related rows
+produces N result rows. The optimized mode first selects distinct primary keys, then loads the full entities, so the
+per-page count is always correct.
+
+```php
+User::query()
+    ->where('orders.status', 'paid')    // auto-joins "orders" (1-to-many)
+    ->orderBy('id')
+    ->chunkPaginate(
+        new CursorPaginationRequest(perPage: 100),
+        function ($pagination) {
+            // Each page contains exactly up to 100 User entities,
+            // regardless of how many orders each user has.
+        },
+        optimized: true,
+    );
+```
 
 ---
 

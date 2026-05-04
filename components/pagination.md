@@ -31,8 +31,8 @@ keywords:
 
 ## Quick start
 
-Paginators are the recommended way to handle pagination. They provide a unified API for request parsing, navigation, and
-response preparation.
+Paginators are the recommended way to handle pagination. They provide a unified API for request parsing and response
+preparation.
 
 ### Offset Paginator
 
@@ -148,10 +148,12 @@ $response = $paginator->prepareResponse($response, $serverRequest->getUri(), $pa
 
 Navigators generate pagination requests and URIs for navigation links.
 
-### Using with paginators
+### From a pagination result
+
+Each pagination object can create its own navigator via `createNavigator()`:
 
 ```php
-$navigator = $paginator->createNavigator($pagination);
+$navigator = $pagination->createNavigator();
 
 // Get request objects
 $firstRequest = $navigator->getFirstRequest();
@@ -167,7 +169,25 @@ $nextUri = $navigator->getNextUri($baseUri);
 $lastUri = $navigator->getLastUri($baseUri);
 ```
 
+You can pass a custom URI builder to control the query parameter names:
+
+```php
+use Hector\Pagination\UriBuilder\OffsetPaginationUriBuilder;
+
+$uriBuilder = new OffsetPaginationUriBuilder(
+    pageParam: 'p',
+    perPageParam: 'limit',
+);
+
+$navigator = $pagination->createNavigator($uriBuilder);
+
+$nextUri = $navigator->getNextUri($baseUri);
+// https://example.com/api?p=4&limit=20
+```
+
 ### Standalone usage
+
+You can also instantiate a navigator directly:
 
 ```php
 use Hector\Pagination\Navigator\OffsetPaginationNavigator;
