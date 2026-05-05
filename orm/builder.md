@@ -414,23 +414,34 @@ $pagination = User::query()
 
 ### Chunk paginate
 
-Use `chunkPaginate()` to iterate through all pages automatically. The callback receives each page as a
-`PaginationInterface` containing a `Collection` of entities; return `false` to stop early.
+Use `chunkPaginate()` to iterate through all pages automatically. The callback receives two arguments — the page items
+as an ORM `Collection` and the `PaginationInterface` for metadata. Return `false` to stop early.
+
+Because items are provided as a `Collection`, you can call `load()` directly in the callback to eager-load relations
+for the current page, avoiding N+1 queries:
 
 ```php
+use Hector\Orm\Collection\Collection;
+use Hector\Pagination\PaginationInterface;
 use Hector\Pagination\Request\CursorPaginationRequest;
 
 Post::query()
     ->orderBy('id')
     ->chunkPaginate(
         new CursorPaginationRequest(perPage: 100),
-        function ($pagination) {
-            foreach ($pagination as $post) {
-                // Process each entity...
+        function (Collection $posts, PaginationInterface $pagination) {
+            $posts->load(['author', 'tags']);
+
+            foreach ($posts as $post) {
+                // $post->author and $post->tags are already loaded
             }
         },
     );
 ```
+
+If the builder has a `limit()` set, `chunkPaginate()` honors it as a global maximum across all pages — it adjusts the
+last page's per-page size so that the total number of processed entities never exceeds the limit. This is consistent
+with `Builder::chunk()`.
 
 This is more efficient than `chunk(lazy: false)` for large datasets because each page starts where the previous one
 left off, avoiding the O(n²) cost of large LIMIT/OFFSET queries.
@@ -446,7 +457,7 @@ User::query()
     ->orderBy('id')
     ->chunkPaginate(
         new CursorPaginationRequest(perPage: 100),
-        function ($pagination) {
+        function (Collection $users, PaginationInterface $pagination) {
             // Each page contains exactly up to 100 User entities,
             // regardless of how many orders each user has.
         },

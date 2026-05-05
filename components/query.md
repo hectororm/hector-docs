@@ -746,8 +746,8 @@ $pagination->getNextPosition();  // ['id' => 62]
 
 ### Chunk paginate
 
-Use `chunkPaginate()` to iterate through all pages automatically. The callback receives each page as a
-`PaginationInterface`; return `false` to stop early.
+Use `chunkPaginate()` to iterate through all pages automatically. The callback receives two arguments — the page items
+(plain array of rows) and the `PaginationInterface` for metadata. Return `false` to stop early.
 
 ```php
 use Hector\Pagination\Request\CursorPaginationRequest;
@@ -757,13 +757,16 @@ $queryBuilder
     ->orderBy('id')
     ->chunkPaginate(
         new CursorPaginationRequest(perPage: 100),
-        function ($pagination) {
-            foreach ($pagination as $row) {
+        function (array $items, PaginationInterface $pagination) {
+            foreach ($items as $row) {
                 // Process each row...
             }
         },
     );
 ```
+
+If the builder has a `limit()` set, `chunkPaginate()` honors it as a global maximum across all pages — it adjusts the
+last page's per-page size so that the total number of processed rows never exceeds the limit.
 
 This is more efficient than LIMIT/OFFSET for large datasets, especially with cursor pagination, because each page
 starts where the previous one left off.
