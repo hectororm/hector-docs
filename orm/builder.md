@@ -368,6 +368,19 @@ $pagination->getNextPosition();     // ['id' => 120]
 $pagination->getPreviousPosition(); // ['id' => 100]
 ```
 
+> ⚠️ **Cursor pagination requirements**
+>
+> The `ORDER BY` used for cursor pagination must define a **total order**, otherwise rows are silently skipped or
+> duplicated across pages:
+>
+> - Order by a unique column, or append the primary key as a tie-breaker (e.g. `->orderBy('status')->orderBy('id')`
+>   rather than `->orderBy('status')` alone).
+> - The ordered columns must not contain `NULL` values.
+> - Do **not** order by a MySQL `ENUM` column: it sorts by the ENUM's declaration index, while the cursor's `WHERE`
+>   comparison binds the value as a string and compares lexicographically, so rows get skipped. Order by the primary
+>   key (or another plain unique column) instead.
+> - Ordering expressions (e.g. `RAND()`) cannot be used as cursor keys.
+
 ### Supported request types
 
 | Request Type              | Returns            | Best For                        |

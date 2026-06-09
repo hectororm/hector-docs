@@ -744,6 +744,21 @@ $pagination = $queryBuilder
 $pagination->getNextPosition();  // ['id' => 62]
 ```
 
+> ⚠️ **Cursor pagination requirements**
+>
+> Cursor (keyset) pagination seeks pages with `WHERE` conditions built from the `ORDER BY` columns, so the ordering must
+> meet a few requirements:
+>
+> - **Total order.** The `ORDER BY` columns must be unique *together*: either a unique column, or a non-unique column
+>   followed by a unique tie-breaker (typically the primary key). Ordering by a non-unique column alone — e.g.
+>   `ORDER BY status` — **silently skips or duplicates rows** across pages. Use `ORDER BY status, id` instead.
+> - **No `NULL` values** in the ordered columns.
+> - **No columns whose sort order differs from their bound-parameter comparison.** The most common pitfall is a MySQL
+>   `ENUM`: `ORDER BY enum_col` sorts by the ENUM's *declaration index*, while the cursor's `WHERE enum_col > :value`
+>   (bound as a string) compares *lexicographically*. The two disagree, so rows are skipped. Order by a plain unique
+>   column (such as the primary key) instead.
+> - **Plain columns only.** Ordering expressions (e.g. `ORDER BY RAND()`) cannot be used as cursor keys.
+
 ### Chunk paginate
 
 Use `chunkPaginate()` to iterate through all pages automatically. The callback receives two arguments — the page items
