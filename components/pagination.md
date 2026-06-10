@@ -418,6 +418,37 @@ Use cases:
 - Prevent cursor inspection by clients
 - Stronger security than signed-only cursors
 
+### Choosing an encoder (security)
+
+> ⚠️ **Important**: `Base64CursorEncoder` is the **default**, but Base64 is an
+> *encoding*, not a security mechanism. A cursor produced by it is fully
+> **readable and forgeable** by any client: anyone can craft a cursor with
+> arbitrary keys and values (including the internal `__direction` flag). The
+> decoded position is then handed back to your application through
+> `getPosition()` and used to build the keyset `WHERE` clause.
+
+The decoder is otherwise hardened (strict Base64, `JSON_THROW_ON_ERROR`, an
+`is_array()` check, and **no** `unserialize()`), so a forged cursor cannot lead
+to code execution, and position **values are always bound** as query parameters —
+there is no SQL injection. The residual risk is purely that a client can pick an
+**arbitrary position** (and direction) it was not meant to control.
+
+Pick the encoder that matches your threat model:
+
+| Encoder                  | Tamper-proof | Confidential | When to use                                                                                 |
+|--------------------------|:------------:|:------------:|---------------------------------------------------------------------------------------------|
+| `Base64CursorEncoder`    |      ❌       |      ❌       | The cursor only carries non-sensitive keyset values your queries already trust (e.g. a public `id`), and a client choosing an arbitrary position is harmless. |
+| `SignedCursorEncoder`    |      ✅       |      ❌       | You must guarantee the position was produced by **your** server (reject forged/altered cursors). Values stay readable. **Recommended for public APIs.** |
+| `EncryptedCursorEncoder` |      ✅       |      ✅       | The cursor carries internal or sensitive data (internal IDs, tenant, filters) that clients must not read **or** forge.                                       |
+
+> ℹ️ **Note**: `SignedCursorEncoder` and `EncryptedCursorEncoder` both require a
+> secret/key to be configured and stored securely (environment variable, secrets
+> manager). Rotating that secret invalidates previously issued cursors.
+
+Switching encoder is a drop-in change on the `CursorPaginator` (and on
+`CursorPaginationRequest::fromCursor()` / `fromRequest()`); no change to the rest
+of your pagination code is required.
+
 ## Cursor storage
 
 Store cursors server-side for short URLs and complex state.
