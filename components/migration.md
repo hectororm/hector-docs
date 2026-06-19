@@ -509,6 +509,25 @@ error as `previous`. The tracker is **not** updated on failure.
 > ℹ️ **Note**: Migrations that produce an empty Plan (no DDL operations) are still tracked — they are simply marked
 > as applied/reverted without opening a transaction.
 
+### Concurrency
+
+Tracking is **atomic per migration**: the `DbTracker` records applied migrations using the primary key of its
+tracking table, so two runners cannot apply or record the *same* migration twice (a concurrent duplicate is detected
+and treated as already applied).
+
+The runner does **not** provide a global run lock, however. It does not prevent two processes from running
+*different* pending migrations at the same time, which would break the guaranteed migration order. Ensuring that a
+**single migration run executes at a time** is the responsibility of the calling application or orchestrator, for
+example:
+
+- a single, serialized deployment/CI-CD step that runs migrations;
+- an application-level or infrastructure lock (e.g. a distributed lock, a job queue with concurrency 1);
+- a database-level advisory lock acquired by your application around the run (e.g. MySQL `GET_LOCK()`,
+  PostgreSQL `pg_advisory_lock()`).
+
+> ⚠️ **Note**: Running multiple migration processes concurrently without such an external lock is not supported and
+> may apply different migrations out of order.
+
 ### Dry-run mode
 
 Both `up()` and `down()` accept a `dryRun` parameter. In dry-run mode, the runner goes through the full migration
