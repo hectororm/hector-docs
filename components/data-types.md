@@ -33,17 +33,18 @@ Each type supports **bidirectional conversion**:
 
 ## Overview
 
-| Type             | Description                              | Key Arguments           |
-|------------------|------------------------------------------|-------------------------|
-| `BooleanType`    | Integer to PHP boolean                   | –                       |
-| `DateTimeType`   | Date string to `DateTimeInterface`       | `format`, `class`       |
-| `EnumType`       | DB value to PHP `enum`                   | `enum`, `try`           |
-| `JsonType`       | JSON string to array/stdClass/scalar     | `associative`           |
-| `NumericType`    | DB number to PHP int/float               | `type`                  |
-| `SetType`        | Comma-separated values to array          | –                       |
-| `StringType`     | String with optional truncation/encoding | `maxlength`, `encoding` |
-| `UuidType`       | UUID as string                           | `storage`               |
-| `RamseyUuidType` | UUID as `Ramsey\Uuid\UuidInterface`      | `storage`               |
+| Type             | Description                              | Key Arguments                 |
+|------------------|------------------------------------------|-------------------------------|
+| `BooleanType`    | Integer to PHP boolean                   | –                             |
+| `DateTimeType`   | Date string to `DateTimeInterface`       | `format`, `class`, `timezone` |
+| `DecimalType`    | Exact `DECIMAL`/`NUMERIC` (no float)     | –                             |
+| `EnumType`       | DB value to PHP `enum`                   | `enum`, `try`                 |
+| `JsonType`       | JSON string to array/stdClass/scalar     | `associative`                 |
+| `NumericType`    | DB number to PHP int/float               | `type`                        |
+| `SetType`        | Comma-separated values to array          | –                             |
+| `StringType`     | String with optional truncation/encoding | `maxlength`, `encoding`       |
+| `UuidType`       | UUID as string                           | `storage`                     |
+| `RamseyUuidType` | UUID as `Ramsey\Uuid\UuidInterface`      | `storage`                     |
 
 ---
 
@@ -72,10 +73,18 @@ Converts formatted date/time strings to `DateTimeInterface` instances and back.
 
 #### Arguments
 
-| Name   | Description                            | Required | Default           |
-|--------|----------------------------------------|----------|-------------------|
-| format | Format of datetime string              | No       | `'Y-m-d H:i:s'`   |
-| class  | `DateTimeInterface`-implementing class | No       | `DateTime::class` |
+| Name     | Description                            | Required | Default           |
+|----------|----------------------------------------|----------|-------------------|
+| format   | Format of datetime string              | No       | `'Y-m-d H:i:s'`   |
+| class    | `DateTimeInterface`-implementing class | No       | `DateTime::class` |
+| timezone | `DateTimeZone` applied to every path   | No       | `null`            |
+
+> 🆕 **Info**: *Since version 1.4*
+>
+> The `timezone` argument lets you pin the timezone used for every conversion path. When it is `null`,
+> the ambient PHP default timezone (`date_default_timezone_get()`) is used. As a result, the
+> numeric/timestamp path now agrees with the string path instead of rendering UTC wall-clock time for a
+> `@timestamp` value.
 
 #### Conversion
 
@@ -83,6 +92,32 @@ Converts formatted date/time strings to `DateTimeInterface` instances and back.
 |-------------------------|--------------------------------------------|
 | `'2025-07-04 09:00:00'` | `DateTimeImmutable('2025-07-04 09:00:00')` |
 | `'invalid-date'`        | `Exception`                                |
+
+### DecimalType
+
+> 🆕 **Info**: *Since version 1.4*
+
+`#[Orm\Type(column: 'amount', type: DecimalType::class)]`
+
+Keeps `DECIMAL`/`NUMERIC` columns exact. These are arbitrary-precision numbers, so casting them to a PHP
+`float` would lose precision (e.g. monetary amounts). This type never goes through `float`: values are kept
+as their canonical numeric **string**. When the entity property is typed as `\BcMath\Number` (PHP 8.4+), the
+value is hydrated as a `Number` so exact decimal arithmetic is possible.
+
+*No arguments.*
+
+> ℹ️ **Note**: `TypeSet` maps `decimal` and `numeric` columns to `DecimalType` automatically. `float`/`double`
+> columns still use `NumericType`.
+
+> ⚠️ **Warning**: A non-numeric value throws a `ValueException` rather than being silently coerced.
+
+#### Conversion
+
+| Database value | PHP value (untyped / `string`) | PHP value (`\BcMath\Number`, PHP 8.4+) |
+|----------------|--------------------------------|----------------------------------------|
+| `'19.99'`      | `'19.99'`                      | `Number('19.99')`                      |
+| `'1.50'`       | `'1.50'`                       | `Number('1.50')`                       |
+| `'abc'`        | `ValueException`               | `ValueException`                       |
 
 ### EnumType
 
@@ -151,6 +186,15 @@ Casts numeric string values from the database into PHP `int` or `float`.
 |----------------|-----------------------|-------------------------|
 | `'42'`         | `42`                  | `42.0`                  |
 | `'3.14'`       | `3`                   | `3.14`                  |
+| `'abc'`        | `ValueException`      | `ValueException`        |
+
+> 🆕 **Info**: *Since version 1.4*
+>
+> A non-numeric string (e.g. `'abc'`) now throws a `ValueException` instead of being silently coerced to
+> `0`/`0.0`. The legitimate `float` to `int` truncation (e.g. `'3.14'` → `3`) is unchanged.
+
+> 💡 **Tip**: For exact `DECIMAL`/`NUMERIC` values (e.g. monetary amounts), prefer
+> [`DecimalType`](#decimaltype), which never goes through a lossy `float`.
 
 ### SetType
 
