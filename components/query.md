@@ -198,6 +198,12 @@ Full list:
 * `whereStartsWith($column, $string)`
 * `whereEndsWith($column, $string)`
 
+> 🆕 **Info**: *Since version 1.4*
+>
+> An empty array passed to `whereIn()`/`whereNotIn()` (and their `having*` counterparts) now emits a constant
+> condition instead of invalid SQL: an empty `IN` becomes `1 = 0` (always false) and an empty `NOT IN` becomes
+> `1 = 1` (always true).
+
 All `where*` methods have their `having*` counterparts for filtering grouped results:
 
 ```php
@@ -277,8 +283,15 @@ $queryBuilder
 
 $queryBuilder->resetOrder();
 $queryBuilder->random();
-// SELECT * FROM posts ORDER BY RAND()
+// SELECT * FROM posts ORDER BY RAND()      (MySQL/MariaDB)
+// SELECT * FROM posts ORDER BY RANDOM()    (SQLite, PostgreSQL)
 ```
+
+> 🆕 **Info**: *Since version 1.4*
+>
+> `random()` is now driver-aware: it emits `RAND()` on MySQL/MariaDB and `RANDOM()` on SQLite and
+> PostgreSQL, via the `Hector\Query\Statement\RandomFunction` statement. Previously a fixed `RAND()` was
+> emitted, which is invalid on SQLite/PostgreSQL.
 
 ## Sorting
 
@@ -675,6 +688,11 @@ Available on:
 
 > 💡 **Tip**: On databases that support it (MySQL 8+, PostgreSQL), `SKIP LOCKED` is automatically added to avoid blocking
 > on already-locked rows.
+
+> 🆕 **Info**: *Since version 1.4*
+>
+> On drivers that support row locking but not `SKIP LOCKED` (e.g. MySQL < 8.0), a plain `FOR UPDATE` clause is
+> now emitted. Previously no lock was applied at all on those drivers.
 
 ---
 
