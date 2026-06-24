@@ -82,13 +82,14 @@ Use `create()` with a callback to define columns, indexes and foreign keys in on
 ```php
 use Hector\Schema\ForeignKey;
 use Hector\Schema\Index;
+use Hector\Schema\Plan\Raw;
 
 $plan->create('posts', function ($table) {
     $table->addColumn('id', 'INT', autoIncrement: true);
     $table->addColumn('title', 'VARCHAR(255)');
     $table->addColumn('body', 'TEXT', nullable: true);
     $table->addColumn('user_id', 'INT');
-    $table->addColumn('created_at', 'DATETIME', default: 'CURRENT_TIMESTAMP', hasDefault: true);
+    $table->addColumn('created_at', 'DATETIME', default: new Raw('CURRENT_TIMESTAMP()'));
 
     $table->addIndex('PRIMARY', ['id'], Index::PRIMARY);
     $table->addIndex('idx_user', ['user_id']);
@@ -155,6 +156,34 @@ $plan->alter('users', function ($table) {
     $table->addColumn('row_id', 'INT', first: true);
 });
 ```
+
+#### Column defaults
+
+> 🆕 **Info**: *Since version 1.4*
+
+A plain `default` value is emitted as a **quoted string literal** (e.g. `DEFAULT 'active'`). To emit a value
+**verbatim** — for SQL functions or keywords such as `CURRENT_TIMESTAMP()`, `NOW()` or `UUID()` — wrap it in
+`Hector\Schema\Plan\Raw`:
+
+```php
+use Hector\Schema\Plan\Raw;
+
+$plan->create('posts', function ($table) {
+    // Literal string default: DEFAULT 'draft'
+    $table->addColumn('status', 'VARCHAR(20)', default: 'draft');
+
+    // Raw SQL expression: DEFAULT CURRENT_TIMESTAMP()
+    $table->addColumn('created_at', 'DATETIME', default: new Raw('CURRENT_TIMESTAMP()'));
+});
+```
+
+The `hasDefault` parameter of `addColumn()` / `modifyColumn()` is now `?bool` and defaults to `null` (auto):
+the `DEFAULT` clause is enabled automatically when a `Raw` expression or any non-`null` value is provided.
+Pass an explicit boolean to force the behaviour — in particular, use `hasDefault: true` together with a `null`
+value to emit `DEFAULT NULL`.
+
+> ℹ️ **Note**: `Raw` is meant for actual SQL expressions only; keep using a plain string for literal defaults.
+> It is not intended to express a `NULL` default (use a `null` value with `hasDefault: true` instead).
 
 #### Rename column compatibility
 
@@ -446,6 +475,10 @@ which is the safest position for structural changes.
 | Method                                              | Description  |
 |-----------------------------------------------------|--------------|
 | `addColumn($name, $type, $nullable, $default, ...)` | Add a column |
+
+> 🆕 **Info**: *Since version 1.4* — `$default` accepts a `Hector\Schema\Plan\Raw` expression (emitted
+> verbatim), and `$hasDefault` is now `?bool` (defaults to `null` = auto-detected). See
+> [Column defaults](#column-defaults).
 
 **Column operations (ALTER only):**
 

@@ -759,6 +759,7 @@ echo "Reverted: " . implode(', ', $reverted) . "\n";
 use Hector\Migration\ReversibleMigrationInterface;
 use Hector\Schema\Index;
 use Hector\Schema\Plan\Plan;
+use Hector\Schema\Plan\Raw;
 
 return new class implements ReversibleMigrationInterface {
     public function up(Plan $plan): void
@@ -767,7 +768,7 @@ return new class implements ReversibleMigrationInterface {
             $table->addColumn('id', 'INT', autoIncrement: true);
             $table->addColumn('email', 'VARCHAR(255)');
             $table->addColumn('name', 'VARCHAR(100)', nullable: true);
-            $table->addColumn('created_at', 'DATETIME', default: 'CURRENT_TIMESTAMP', hasDefault: true);
+            $table->addColumn('created_at', 'DATETIME', default: new Raw('CURRENT_TIMESTAMP()'));
             $table->addIndex('PRIMARY', ['id'], Index::PRIMARY);
             $table->addIndex('idx_email', ['email'], Index::UNIQUE);
         });
