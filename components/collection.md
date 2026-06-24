@@ -215,15 +215,26 @@ $collection = Collection::new(['foo', 'bar']);
 $collection->each(fn($v) => print($v . ' ')); // Outputs: foo bar
 ```
 
-### `search(callable|mixed $needle, bool $strict = false): int|string|false`
+### `search(mixed $needle, bool $strict = false): int|string|false`
 
-Search for a value or use callback to find matching item.
+Search for a value, or use a `Closure` predicate to find a matching item. Returns the key of the first match,
+or `false` if none is found.
 
 ```php
 $collection = Collection::new(['foo', 'bar', '1', 1, 'quxx']);
 $collection->search(1); // 2
 $collection->search(1, true); // 3
 $collection->search(fn($v) => str_starts_with($v, 'ba')); // 1
+```
+
+> 🆕 **Info**: *Since version 1.4*
+>
+> Only a `Closure` is treated as a predicate. A callable string or array (e.g. `'trim'`, `[$obj, 'method']`)
+> is searched as a plain **value**, not invoked as a callback.
+
+```php
+$collection = Collection::new(['trim', 'strtolower']);
+$collection->search('trim'); // 0 — matched as a value, 'trim' is not called
 ```
 
 ### `get(int $index = 0): mixed`
@@ -305,13 +316,30 @@ $collection = Collection::new(['a' => 'foo', 'b' => 'bar']);
 $collection->values()->getArrayCopy(); // ['foo', 'bar']
 ```
 
-### `unique(): static`
+### `unique(?Closure $callback = null): static`
 
 Remove duplicate values.
 
 ```php
 $collection = Collection::new(['k1' => 'foo', 1 => 'foo', 'bar', 'k2' => 'baz']);
 $collection->unique()->getArrayCopy(); // ['k1' => 'foo', 'bar', 'k2' => 'baz']
+```
+
+> 🆕 **Info**: *Since version 1.4*
+>
+> An optional `Closure` may be passed to compute the comparison key. The callback receives `($item, $key)`
+> and items sharing the same returned key are de-duplicated (strict comparison).
+
+```php
+$users = Collection::new([
+    ['id' => 1, 'role' => 'admin'],
+    ['id' => 2, 'role' => 'user'],
+    ['id' => 3, 'role' => 'admin'],
+]);
+
+// Keep the first item of each role
+$users->unique(fn($user) => $user['role'])->getArrayCopy();
+// [['id' => 1, 'role' => 'admin'], ['id' => 2, 'role' => 'user']]
 ```
 
 ### `flip(): static`
