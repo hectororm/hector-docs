@@ -10,6 +10,7 @@ keywords:
   - migration
   - create-table
   - alter-table
+  - purge
   - compiler
 ---
 
@@ -67,7 +68,7 @@ foreach ($plan->getStatements($compiler) as $sql) {
 A `Plan` is an ordered collection of entries. Each entry implements `OperationInterface`. Table operations (
 `CreateTable`, `AlterTable`) group sub-operations (columns, indexes, foreign keys, triggers) for a single table; view
 operations (`CreateView`, `AlterView`, `DropView`), trigger operations (`CreateTrigger`, `DropTrigger`), atomic table
-operations (`DropTable`, `MigrateData`), foreign key check operations (`DisableForeignKeyChecks`,
+operations (`DropTable`, `PurgeTable`, `MigrateData`), foreign key check operations (`DisableForeignKeyChecks`,
 `EnableForeignKeyChecks`) and raw statements (`RawStatement`) are standalone entries.
 
 `Plan` implements `Countable` and `IteratorAggregate`.
@@ -193,6 +194,73 @@ current column definition from the schema.
 
 > ℹ️ **Note**: The `CHANGE COLUMN` fallback requires a `Schema` to introspect the current column definition.
 > A `PlanException` is thrown if no schema is provided and the server does not support `RENAME COLUMN`.
+
+### Purging a table
+
+> 🆕 **Info**: *Since version 1.5*
+
+`Plan::purge(string|Table $table, bool $resetIncrement = false): static` removes all rows while preserving
+the table structure. It accepts a table name or a schema `Table` object and returns the plan for chaining:
+
+```php
+// Remove all rows without explicitly resetting the identifier counter
+$plan->purge('articles');
+
+// Remove all rows and explicitly reset the automatic identifier counter
+$plan->purge('articles', resetIncrement: true);
+```
+
+The dialect selects the SQL according to the reset option:
+
+| Database | `resetIncrement: false` (default) | `resetIncrement: true` |
+| --- | --- | --- |
+| MySQL / MariaDB | `DELETE FROM table_name` | `TRUNCATE TABLE table_name` |
+| SQLite | `DELETE FROM table_name` | `DELETE FROM table_name`, then `DELETE FROM sqlite_sequence WHERE name = 'table_name'` |
+
+No schema metadata is required to compile a purge. The `PurgeTable` operation runs at its declaration position
+among structure operations, after global pre-operations and before post-operations. Declare it before an alteration
+that requires an empty table:
+
+```php
+$plan->purge('articles', resetIncrement: true);
+$plan->alter('articles')
+    ->modifyColumn('reference', 'VARCHAR(255)', nullable: false);
+```
+
+See [Clearing data before a schema change](migration.md#clearing-data-before-a-schema-change) for a complete migration.
+
+#### SQLite counter reset
+
+An explicit reset requires `sqlite_sequence` to exist. SQLite creates this system table when an `AUTOINCREMENT`
+table is created. If it exists but has no entry for the target table, deleting the sequence entry does nothing.
+If it does not exist, the reset fails with a normal SQL error. Within the migration runner's SQLite transaction,
+that failure also rolls back the preceding deletion. Executing the SQL manually outside a transaction does not
+provide that guarantee.
+
+For `INTEGER PRIMARY KEY` without `AUTOINCREMENT`, there is no persistent counter to reset and identifiers may
+be reused after a purge even with `resetIncrement: false`. That option means no **explicit** reset, not guaranteed
+identifier continuity. Reset values follow the database's native counter rules.
+
+#### Foreign keys and triggers
+
+Purges are explicit: Hector does not infer them from schema changes, inspect incoming foreign keys, disable
+foreign-key checks, add `CASCADE`, or fall back from `TRUNCATE` to `DELETE` on failure. Native errors stop the
+migration. On MySQL/InnoDB, a foreign key from another table can prevent truncation even if that table is empty.
+
+`DELETE` follows the database's `ON DELETE` actions and fires deletion triggers; MySQL/MariaDB `TRUNCATE` does not
+fire those triggers. Changing `resetIncrement` therefore also changes these native effects on MySQL/MariaDB.
+
+#### Transaction boundaries
+
+MySQL/MariaDB `TRUNCATE` implicitly commits and cannot be rolled back. A later failure can leave a table purged
+while its migration remains pending; retrying runs the purge again. `DELETE` followed by `ALTER TABLE` is not
+globally rollback-safe either, because the alteration implicitly commits preceding changes before execution.
+An enclosing transaction cannot prevent that commit. A `down()` method does not automatically restore deleted data.
+
+#### Custom dialects
+
+Starting with version 1.5, custom implementations of `DialectInterface` must implement
+`compilePurgeTable(PurgeTable $purgeTable): iterable`, returning the SQL statements for their database.
 
 ### Dropping a table
 
