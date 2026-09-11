@@ -187,7 +187,7 @@ value to emit `DEFAULT NULL`.
 
 #### Automatic update timestamps (MySQL / MariaDB)
 
-> 🆕 **Info**: *Unreleased*
+> 🆕 **Info**: *Since version 1.5*
 
 `addColumn()` and `modifyColumn()` accept `useCurrentOnUpdate: bool = false`:
 

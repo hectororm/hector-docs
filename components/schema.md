@@ -204,8 +204,8 @@ Represents a column in a table.
     * `getMaxlength(): ?int`
     * `getNumericPrecision(): ?int`
     * `getNumericScale(): ?int`
-    * `getOnUpdate(): ?string` — database-side update expression, e.g. `CURRENT_TIMESTAMP(6)` (unreleased)
-    * `getDatetimePrecision(): ?int` — fractional seconds precision from MySQL/MariaDB metadata (unreleased)
+    * `getOnUpdate(): ?string` — database-side update expression, e.g. `CURRENT_TIMESTAMP(6)` (since 1.5)
+    * `getDatetimePrecision(): ?int` — fractional seconds precision from MySQL/MariaDB metadata (since 1.5)
     * `isUnsigned(): bool`
     * `getCharset(): ?string`
     * `getCollation(): ?string`
