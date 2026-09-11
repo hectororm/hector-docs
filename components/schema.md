@@ -204,6 +204,8 @@ Represents a column in a table.
     * `getMaxlength(): ?int`
     * `getNumericPrecision(): ?int`
     * `getNumericScale(): ?int`
+    * `getOnUpdate(): ?string` — database-side update expression, e.g. `CURRENT_TIMESTAMP(6)` (unreleased)
+    * `getDatetimePrecision(): ?int` — fractional seconds precision from MySQL/MariaDB metadata (unreleased)
     * `isUnsigned(): bool`
     * `getCharset(): ?string`
     * `getCollation(): ?string`
@@ -215,6 +217,15 @@ Represents a column in a table.
 
 > **Deprecated:** The `$quoted` parameter on `getName()` and `getFullName()` is deprecated. Use
 `Hector\Query\Statement\Quoted` for driver-aware identifier quoting.
+
+For MySQL/MariaDB, `getOnUpdate()` returns a normalized expression (`CURRENT_TIMESTAMP` or
+`CURRENT_TIMESTAMP(n)`) when a column has an automatic update clause, otherwise `null`.
+`getDatetimePrecision()` preserves the distinction between zero fractional digits (`0`) and absent metadata (`null`).
+Both properties survive serialization; caches created before these properties existed deserialize with `null` values.
+
+SQLite introspection returns `null` for both properties. In particular, a migration using
+[`useCurrentOnUpdate`](plan.md#automatic-update-timestamps-mysql--mariadb) does not create this property in SQLite:
+the introspected schema describes what the database actually stores.
 
 ### `Hector\Schema\Index`
 

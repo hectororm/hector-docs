@@ -185,6 +185,55 @@ value to emit `DEFAULT NULL`.
 > ℹ️ **Note**: `Raw` is meant for actual SQL expressions only; keep using a plain string for literal defaults.
 > It is not intended to express a `NULL` default (use a `null` value with `hasDefault: true` instead).
 
+#### Automatic update timestamps (MySQL / MariaDB)
+
+> 🆕 **Info**: *Unreleased*
+
+`addColumn()` and `modifyColumn()` accept `useCurrentOnUpdate: bool = false`:
+
+```php
+use Hector\Schema\Plan\Raw;
+
+$plan->create('events', function ($table) {
+    $table->addColumn('id', 'INTEGER', autoIncrement: true);
+    $table->addIndex('PRIMARY', ['id'], \Hector\Schema\Index::PRIMARY);
+    $table->addColumn(
+        name: 'updated_at',
+        type: 'TIMESTAMP',
+        default: new Raw('CURRENT_TIMESTAMP'),
+        useCurrentOnUpdate: true,
+    );
+});
+```
+
+On **MySQL / MariaDB**, this emits `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`.
+The database updates the timestamp when another column actually changes, including changes made outside Hector.
+An explicit assignment to the timestamp takes precedence. The option does not implicitly add a `DEFAULT` clause.
+
+Only `TIMESTAMP` and `DATETIME`, with optional fractional seconds precision from **0 to 6**, are supported.
+For example, `DATETIME(6)` emits `ON UPDATE CURRENT_TIMESTAMP(6)`; use a matching
+`default: new Raw('CURRENT_TIMESTAMP(6)')` if a current-time default is also needed on MySQL/MariaDB.
+An incompatible type or `autoIncrement: true` together with this option raises a `PlanException` on MySQL/MariaDB.
+This is a current-time option, not a general-purpose update expression or a foreign-key `ON UPDATE` rule.
+
+On **SQLite**, the option is **ignored without an exception or an automatically created trigger**.
+The first example can therefore be used with MySQL in production and SQLite in tests: the insertion default works
+on both, but SQLite does not automatically update the timestamp. Test the database-side update behaviour against
+MySQL/MariaDB. Other SQL expressions still need to be compatible with the target engine; for example,
+`CURRENT_TIMESTAMP(6)` is not a SQLite expression.
+
+When modifying a column, repeat `useCurrentOnUpdate: true` to retain the behaviour. Omitting the option or setting
+it to `false` removes the clause on MySQL/MariaDB:
+
+```php
+$plan->alter('events')->modifyColumn(
+    'updated_at',
+    'TIMESTAMP',
+    default: new Raw('CURRENT_TIMESTAMP'),
+    useCurrentOnUpdate: false,
+);
+```
+
 #### Rename column compatibility
 
 `renameColumn()` uses the modern `RENAME COLUMN` syntax by default. When the compiler detects an older server
