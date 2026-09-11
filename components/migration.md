@@ -73,6 +73,41 @@ class AddAvatarColumn implements MigrationInterface
 }
 ```
 
+### Clearing data before a schema change
+
+> 🆕 **Info**: *Since version 1.5*
+
+When existing data may be discarded, use `Plan::purge()` before an alteration that would otherwise conflict with
+that data. For example, clear a table containing `NULL` references before making its reference column mandatory:
+
+```php
+use Hector\Migration\MigrationInterface;
+use Hector\Schema\Plan\Plan;
+
+class RequireArticleReference implements MigrationInterface
+{
+    public function up(Plan $plan): void
+    {
+        $plan->purge('articles', resetIncrement: true);
+
+        $plan->alter('articles')
+            ->modifyColumn('reference', 'VARCHAR(255)', nullable: false);
+    }
+}
+```
+
+Omit `resetIncrement`, or pass `false`, to avoid an explicit counter reset. On SQLite, requesting a reset requires
+`sqlite_sequence` to exist. Purge compilation itself does not require schema metadata; an alteration requiring a
+SQLite table rebuild still requires the runner's `Schema`, as described in [Schema introspection](plan.md#schema-introspection).
+
+The runner logs the purge SQL and includes it in `dryRun` without executing it or recording the migration as applied.
+A purge failure stops subsequent statements. Database-native transaction rules still apply: on MySQL/MariaDB,
+an implicit commit can leave the table empty even if a later statement fails. The migration remains pending and
+will execute the purge again on retry. A `down()` method cannot automatically restore deleted rows.
+
+See [Purging a table](plan.md#purging-a-table) for database-specific SQL, counter reset prerequisites, foreign keys,
+triggers, and transaction boundaries.
+
 ### Reversible migration
 
 Implement `ReversibleMigrationInterface` to support rollback:
