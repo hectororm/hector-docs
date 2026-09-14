@@ -206,6 +206,9 @@ Represents a column in a table.
     * `getNumericScale(): ?int`
     * `getOnUpdate(): ?string` — database-side update expression, e.g. `CURRENT_TIMESTAMP(6)` (since 1.5)
     * `getDatetimePrecision(): ?int` — fractional seconds precision from MySQL/MariaDB metadata (since 1.5)
+    * `getGenerationExpression(): ?string` — generated-column SQL expression (since 1.5)
+    * `isGenerated(): bool` — whether the column is generated (since 1.5)
+    * `isGeneratedStored(): bool` — whether a generated column is STORED (since 1.5)
     * `isUnsigned(): bool`
     * `getCharset(): ?string`
     * `getCollation(): ?string`
@@ -226,6 +229,34 @@ Both properties survive serialization; caches created before these properties ex
 SQLite introspection returns `null` for both properties. In particular, a migration using
 [`useCurrentOnUpdate`](plan.md#automatic-update-timestamps-mysql--mariadb) does not create this property in SQLite:
 the introspected schema describes what the database actually stores.
+
+#### Generated column metadata
+
+> 🆕 **Info**: *Since version 1.5*
+
+Both MySQL/MariaDB and SQLite generators expose generated columns through the usual table column collection:
+
+```php
+$column = $schema->getTable('order_lines')->getColumn('stored_total');
+
+$column->isGenerated();              // true
+$column->getGenerationExpression();  // SQL expression reported by the database
+$column->isGeneratedStored();        // true for STORED, false for VIRTUAL
+$column->hasDefault();               // false for generated columns, even when nullable
+```
+
+For an ordinary column, the expression is `null` and both generated flags return `false`.
+An expression such as `0` or `NULL` still identifies a generated column. MySQL/MariaDB may normalize the expression's
+formatting and identifier quoting, so its text need not be identical to the migration input.
+
+SQLite uses `PRAGMA table_xinfo` to find generated columns, then extracts their expressions from the table's SQL,
+respecting quoted identifiers, strings, comments and nested parentheses. Hidden virtual-table implementation columns
+remain excluded. An expression that cannot be extracted raises a `SchemaException` rather than reporting an ordinary
+column. Older SQLite versions without `table_xinfo` retain ordinary-column introspection through `table_info`.
+
+The expression and storage mode survive serialization. Older schema caches deserialize with `null` / `false` metadata;
+regenerate those caches to discover generated columns. `Schema\Column` stores metadata independently of the
+[`Plan\Generated` declaration object](plan.md#generated-columns).
 
 ### `Hector\Schema\Index`
 
