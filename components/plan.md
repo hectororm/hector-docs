@@ -235,6 +235,76 @@ $plan->alter('events')->modifyColumn(
 );
 ```
 
+#### Generated columns
+
+> 🆕 **Info**: *Since version 1.5*
+
+`addColumn()` and `modifyColumn()` accept `generated: Generated|string|null = null`.
+Use a string for a **VIRTUAL** column, or a `Hector\Schema\Plan\Generated` object to choose its storage mode:
+
+```php
+use Hector\Schema\Plan\Generated;
+
+$plan->create('order_lines', function ($table) {
+    $table->addColumn('quantity', 'INTEGER');
+    $table->addColumn('unit_price', 'INTEGER');
+
+    // VIRTUAL: evaluated when read.
+    $table->addColumn('total', 'INTEGER', generated: 'quantity * unit_price');
+
+    // STORED: calculated and stored when the row is written.
+    $table->addColumn(
+        name: 'stored_total',
+        type: 'INTEGER',
+        generated: new Generated('quantity * unit_price', stored: true),
+    );
+});
+```
+
+`new Generated('quantity * unit_price')` is equivalent to the string shorthand: `stored` defaults to `false`.
+`Generated` exposes `getExpression(): string` and `isStored(): bool` and has no setters.
+An empty or whitespace-only expression raises a `PlanException`.
+Column operations normalize strings once and expose `getGenerated(): ?Generated` and `isGenerated(): bool`.
+
+In `generated`, a string is always **SQL**, whereas a string in `default` is a **literal value**.
+There is no need to wrap the expression in `Raw`. Expressions are emitted verbatim and must be compatible with
+the target engine: Hector does not translate SQL functions or validate expression dependencies.
+Write the source columns when inserting or updating data; let the database compute generated values.
+
+| Operation | MySQL / MariaDB | SQLite 3.31+ |
+| --- | --- | --- |
+| Create VIRTUAL / STORED columns | Native | Native |
+| Add a VIRTUAL column | Native | Native `ALTER TABLE ADD COLUMN` |
+| Add a STORED column | Native | Table rebuild, requiring the existing `Schema` |
+| Modify a generated definition | Subject to engine restrictions | Table rebuild, requiring the existing `Schema` |
+
+MySQL and SQLite honour the requested nullability of generated columns. MariaDB's generated-column syntax does
+not accept `NULL` / `NOT NULL`, so those clauses are omitted there. Use `AutoCompiler` or provide the appropriate
+driver capabilities when compiling for MariaDB. Indexes on generated columns are subject
+to engine restrictions; InnoDB supports secondary indexes on VIRTUAL columns as well as STORED columns.
+
+Generated definitions cannot be combined with an explicit default, `autoIncrement: true`, or `useCurrentOnUpdate: true`.
+This includes `hasDefault: true` with a `null` default, and a non-null `default` supplied even with `hasDefault: false`.
+`nullable: true` alone is accepted and does **not** introduce an implicit `DEFAULT NULL` on a generated column.
+
+When modifying a generated column, supply its definition again:
+
+```php
+$plan->alter('order_lines')->modifyColumn(
+    'stored_total',
+    'INTEGER',
+    generated: new Generated('quantity * unit_price + 1', stored: true),
+);
+```
+
+Omitting `generated`, or passing `null`, requests an ordinary column. Whether a conversion between ordinary,
+VIRTUAL and STORED columns is legal depends on the engine. SQLite rebuilds support these conversions;
+MySQL/MariaDB impose additional restrictions and some MariaDB virtual-column alterations require `ALGORITHM=COPY`.
+Use explicit SQL for operations that require engine-specific ALTER options.
+
+See [SQLite table rebuild](#sqlite-table-rebuild) for copying data and combined-rename behaviour, and
+[column introspection](schema.md#generated-column-metadata) for reading generated definitions back from the database.
+
 #### Rename column compatibility
 
 `renameColumn()` uses the modern `RENAME COLUMN` syntax by default. When the compiler detects an older server
@@ -776,8 +846,9 @@ foreach ($plan->getStatements($compiler) as $sql) {
 
 ## SQLite: table rebuild
 
-SQLite has limited `ALTER TABLE` support — it cannot modify columns, add or drop foreign keys. When these operations are
-detected and a `Schema` is available, the `SqliteCompiler` automatically generates a **table rebuild sequence**:
+SQLite has limited `ALTER TABLE` support — it cannot modify columns, add STORED generated columns, or add or drop
+foreign keys. When these operations are detected and a `Schema` is available, the `SqliteCompiler` automatically
+generates a **table rebuild sequence**:
 
 1. `PRAGMA foreign_keys = OFF`
 2. `CREATE TABLE` a temporary table with the new schema
@@ -787,7 +858,7 @@ detected and a `Schema` is available, the `SqliteCompiler` automatically generat
 6. Recreate non-primary indexes
 7. `PRAGMA foreign_keys = ON`
 
-This is fully transparent — you write the same `Plan` for both MySQL and SQLite.
+The compiler handles this sequence from the supplied `Schema` and the requested operations.
 
 ```php
 // Works on both MySQL and SQLite
@@ -806,6 +877,24 @@ foreach ($plan->getStatements($compiler, $schema) as $sql) {
 
 > ⚠️ **Warning**: Table rebuild requires a `Schema`. Without it, the SQLite compiler will attempt native `ALTER TABLE`
 > statements that may fail.
+
+For generated-column operations, adding STORED columns or modifying generated definitions without the required
+schema raises a `PlanException` rather than emitting an unsupported native ALTER statement. Supply a current schema
+snapshot for the existing table, including the runner's `schema` argument when using `MigrationRunner`.
+
+Generated definitions and their storage modes survive rebuilds. The copy statement writes only surviving ordinary
+destination columns, leaving SQLite to calculate generated values. Converting a generated column to an ordinary
+column copies its former computed value. SQL defaults and secondary indexes are also preserved.
+
+When a rename is combined with a rebuild, the compiler follows rename chains and updates references in generated
+expressions, indexes and local foreign keys (including self-references). It preserves SQL strings, comments, function
+names, CAST types and collation names. An ambiguous unquoted keyword reference raises a `PlanException`; use a separate
+native rename and refresh the schema before rebuilding in that case. Rebuilds with no surviving writable destination
+column also raise a `PlanException` instead of falling back to an incorrect `SELECT *` copy.
+
+SQLite cannot change `PRAGMA foreign_keys` inside an active transaction. When a rebuild needs foreign-key checks
+disabled, arrange that before starting the transaction (including before `MigrationRunner::up()`), and restore the
+connection's setting afterwards. The PRAGMA statements inside a plan cannot disable checks in an existing transaction.
 
 ---
 

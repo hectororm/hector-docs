@@ -261,6 +261,10 @@ $capabilities->hasJson();        // true
 | `hasJson(): bool`            | Whether native JSON functions are supported |
 | `hasStrictMode(): bool`      | Whether strict SQL mode is enforced         |
 
+Since **1.5**, the concrete `Hector\Connection\Driver\SQLiteCapabilities` class also exposes
+`hasGeneratedColumns(): bool`, which returns `true` for SQLite **3.31.0 or newer**. This method is specific to SQLite
+capabilities and is not part of the common `DriverCapabilities` interface.
+
 ---
 
 ## Installation
