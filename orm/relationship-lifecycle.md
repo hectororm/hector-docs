@@ -123,6 +123,25 @@ Inverting a relationship does not copy its deletion policy to the opposite direc
 detachment/removal, change tracking and the active transaction context. Normal entity saves invoke it automatically.
 The underlying `Storage\LifecycleTransaction` handles snapshots and database transaction/savepoint mechanics.
 
+### Transaction snapshots and PHP serialization
+
+`Related`, ORM `Collection` and `EntityData` implement the internal
+`Hector\Orm\Storage\LifecycleSnapshotInterface` contract:
+
+- `lifecycleSnapshot()` captures the state owned by the participant, including pending changes needed for rollback.
+- `restoreLifecycleSnapshot()` restores that state on the same instance without issuing SQL or scheduling new mutations.
+
+The transaction uses this contract rather than calling `__serialize()` or `__unserialize()`. Snapshot arrays may retain
+object references; they are process-local rollback state, not a transport or cache format. Mapped entity properties and
+storage statuses are also captured by the transaction.
+
+PHP serialization of `Related` keeps its existing `related` payload. The new scalar assignment journal (`assignments`)
+is deliberately excluded and is empty after unserialization; serializing an entity does not clear the journal on the
+original live object. A native serialization round-trip preserves cached relation values, but does not transfer a complete
+ORM unit of work. Reload entities in the receiving ORM and explicitly reapply intended assignments before persisting them.
+
+### Explicit lifecycle transactions
+
 An explicit operation can use the same service:
 
 ```php
