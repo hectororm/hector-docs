@@ -20,15 +20,16 @@ understand when and how to use each feature.
 
 ## Overview of attributes
 
-**Hector ORM** provides four attributes to declare entity relationships. These attributes are declared as PHP attributes
+**Hector ORM** provides the following attributes to declare entity relationships. These attributes are declared as PHP attributes
 and support named parameters.
 
 | Attribute       | Purpose                                  |
 |-----------------|------------------------------------------|
-| `HasOne`        | Defines a one-to-one or many-to-one link |
+| `HasOne`        | References one entity through a local foreign key |
+| `HasOneChild`   | Defines a single child with the foreign key on the target (unreleased) |
 | `HasMany`       | Defines a one-to-many relationship       |
 | `BelongsToMany` | Defines a many-to-many link via pivot    |
-| `BelongsTo`     | Inverse of `HasOne`, or polymorphic link |
+| `BelongsTo`     | Derives the inverse of a declared relationship |
 
 ### Parameters
 
@@ -57,24 +58,36 @@ These optional named parameters can be used to filter or shape the relationship:
 
 ## One-to-One / Many-to-One
 
-A `HasOne` relationship indicates that the current entity is linked to one instance of another entity. When used with
-`BelongsTo`, it defines the inverse side of the relation.
+A `HasOne` relationship references one instance of another entity, with the foreign key stored on the **current entity**.
+For a single child whose foreign key is stored on the target, use [HasOneChild](#single-child-hasonechild).
 
 ### Example: A User has one related Profile entity
 
 ```php
+use Hector\Orm\Attributes\BelongsTo;
+use Hector\Orm\Attributes\HasOne;
+use Hector\Orm\Attributes\Table;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Table('users')]
 #[HasOne(
     target: Profile::class,
-    name: 'profile'
+    name: 'profile',
+    columns: ['profile_id' => 'id'],
 )]
 class User extends MagicEntity {}
 
+#[Table('profiles')]
 #[BelongsTo(
     target: User::class,
-    name: 'user'
+    name: 'users',
+    foreignName: 'profile',
 )]
 class Profile extends MagicEntity {}
 ```
+
+Here, `users.profile_id` references `profiles.id`. With the existing `HasOne` implementation (`ManyToOne`), the inverse
+`$profile->users` is a collection. The child-owned foreign key example below has scalar navigation in both directions.
 
 ### With filters
 
@@ -87,6 +100,116 @@ Use filtering parameters directly to restrict results statically (e.g. only acti
     where: ['active' => '1']
 )]
 ```
+
+---
+
+## Single child: HasOneChild
+
+> **Unreleased:** This API is introduced by [issue #135](https://github.com/hectororm/hectororm/issues/135).
+
+Use `HasOneChild` when the current entity is the parent and the foreign key belongs to its single child:
+
+```text
+users.id ← profiles.user_id (FOREIGN KEY + UNIQUE)
+```
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\Table('users')]
+#[Orm\HasOneChild(
+    target: Profile::class,
+    name: 'profile',
+    columns: ['id' => 'user_id'],
+    orphanRemoval: true,
+)]
+class User extends MagicEntity {}
+
+#[Orm\Table('profiles')]
+#[Orm\BelongsTo(
+    target: User::class,
+    name: 'user',
+    foreignName: 'profile',
+)]
+class Profile extends MagicEntity {}
+```
+
+Both `$user->profile` and `$profile->user` return an entity or `null`. On creation:
+
+```php
+$user = new User();
+$user->name = 'Example';
+$user->profile = new Profile();
+$user->profile->bio = 'Hello';
+$user->save();
+```
+
+Hector saves the user, propagates its generated identifier into `profile.user_id`, then saves the profile. A bidirectional
+graph may also be saved from the child side. Resolved one-to-one directions participate in lifecycle transactions on
+either side; an invalid child write also rolls back a new parent. Deferred batches prioritize materialized parent roots
+even when a child was queued first. Existing related non-link field changes still use `save(cascade: true)`.
+
+The relation accepts the target type, its subclasses or `null`; it does not accept a collection. Declare a `UNIQUE`
+constraint on the child FK, or use a shared primary key, to enforce at most one child per parent in the database. Multiple
+children returned by a parent-side read are rejected rather than silently selecting one.
+
+### Detachment, replacement and filters
+
+`HasOneChild` defaults to `orphanRemoval: false`; declaring a child does not implicitly authorize deleting it.
+
+| Configuration | Assigning `null` or replacing the child |
+| --- | --- |
+| `orphanRemoval: false` | Detach the old child if all linking columns can be cleared; otherwise throw `RelationException`. |
+| `orphanRemoval: true` | Delete the old child before attaching the replacement. |
+
+Replacements are atomic through the shared `Lifecycle` service. Reassigning the same persisted child does not delete it.
+A new instance with an assigned/shared primary key is still a new entity requiring an INSERT; replacement must follow the
+declared policy. Failed writes restore generated keys, the previous entity state and the pending scalar assignment.
+
+An explicit assignment works even if the previous child was not loaded. Hector resolves that previous child through the
+relation view. Query hydration is not an assignment and does not overwrite an already-pending assignment.
+
+`where`, `orderBy`, `limit`, `groupBy` and `having` configure the read view, as with other relationships. A child hidden by
+that view is never implicitly deleted. If it already owns the unique FK, attempting to insert another child will fail the
+database constraint and roll back. Read filters are not default values for new entities.
+
+`getRelated()->unset('profile')` discards the cache and pending assignment; it does not change the database. Parent deletion
+remains governed by SQL FK actions or explicit ORM deletes. See [Relationship lifecycle](relationship-lifecycle.md).
+
+### Advanced direction configuration
+
+For custom mapper declarations, `Relationships::oneToOne()` exposes the direction explicitly:
+
+```php
+$relationships->oneToOne(
+    target: Profile::class,
+    name: 'profile',
+    columns: ['id' => 'user_id'],
+    isParent: true,
+    orphanRemoval: true,
+);
+```
+
+`isParent` belongs to the existing `Relationship\OneToOne` constructor and the programmatic declaration:
+
+| Value | Meaning |
+| --- | --- |
+| `true` | Source is the parent; save it before the target child. `HasOneChild` fixes this role. |
+| `false` | Source is the child; save the target parent as needed before propagating its keys locally. |
+| `null` | Infer a unique matching FK direction from schema metadata; otherwise keep the historical child-side strategy before v2. |
+
+When `columns` is omitted, Hector can infer one FK mapping. Several distinct matching mappings require explicit columns.
+Without a matching FK, conventional column names come from the source PK for an explicit parent role, or from the target
+PK for the child/historical role. PK membership or column names alone never establish the dependency direction.
+
+The relation exposes `isParent()` (resolved `true`, `false`, or `null` for historical fallback) and
+`getConfiguredIsParent()` (the originally supplied option). `reverse()` inverts a resolved direction and the mapping,
+but does not copy orphan-removal policies. An unresolved historical relation keeps its historical inverse before v2.
+
+**Compatibility:** `HasOne` still creates `ManyToOne`. Direct users of `OneToOne` may observe corrected write ordering when
+the schema reveals a FK on the target, and corrected ordering in its inverse. Specify the direction explicitly when the
+schema cannot establish it. Removal of the historical fallback is tracked for v2.
 
 ---
 

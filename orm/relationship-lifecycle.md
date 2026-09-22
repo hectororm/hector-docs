@@ -22,9 +22,10 @@ See [Relationships](relationships.md) for relationship declarations, loading and
 Cardinality, dependency direction and lifecycle are separate concerns. A child relationship does not, by its name alone,
 authorize deleting the target entity.
 
-## One-to-many policy
+## Parent-child policy
 
-Configure `orphanRemoval` on `HasMany`, `Relationships::hasMany()` or `Relationship\OneToMany`:
+Configure `orphanRemoval` on `HasMany` or `HasOneChild`, or on their programmatic declarations. Both parent-side scalar
+and collection relationships use the same `Lifecycle` service:
 
 ```php
 use Hector\Orm\Attributes as Orm;
@@ -41,13 +42,37 @@ use Hector\Orm\Attributes as Orm;
 | --- | --- |
 | `false` | Clear its linking columns and save it. Required linking columns or primary-key columns prevent detachment and produce a `RelationException`. |
 | `true` | Delete it through the ORM. |
-| Omitted / `null` (before v2) | Preserve historical deletion of detached children. |
+| Omitted / `null` on `HasMany` (before v2) | Preserve historical deletion of detached children. |
+| Omitted / `null` on `HasOneChild` | Default to `false`: detach rather than delete. |
 
-The omitted-policy default is a **deprecated compatibility behavior**. Set `orphanRemoval: true` explicitly to preserve
-deletion when upgrading to v2. The v2 target default is `false`.
+The omitted-policy default on `HasMany` is a **deprecated compatibility behavior**. Set `orphanRemoval: true` explicitly to
+preserve deletion when upgrading to v2. The v2 target default is `false` for both parent-side relation types.
 
-The shared lifecycle implementation is also the foundation for the parent-side scalar relation tracked in
-[issue #135](https://github.com/hectororm/hectororm/issues/135). `HasOneChild` is not introduced by this change.
+See [HasOneChild](relationships.md#single-child-hasonechild) for the scalar relation introduced by
+[issue #135](https://github.com/hectororm/hectororm/issues/135).
+
+## Explicit scalar changes
+
+```php
+$user->profile = null;          // Detach or delete the previous profile according to its policy.
+$user->save();
+
+$user->profile = new Profile(); // A replacement releases the previous unique link first.
+$user->profile->bio = 'New';
+$user->save();
+```
+
+An explicit scalar assignment resolves the previous child when needed, even if it was never loaded. This differs from
+collection replacement: a scalar relation describes at most one child, whereas an unloaded collection may contain
+arbitrarily many unseen members.
+
+The lookup respects the declared relation view. A hidden child is preserved; its unique FK may then prevent insertion of
+a replacement. Reading an absent/filtered-out child alone never schedules removal. Reassigning the same persisted child
+does not delete it, and replacing an intermediate unsaved assignment does not delete an unrelated persisted entity that
+was never linked by that assignment.
+
+Failed persistence restores the old child state and pending assignment for retry. Invalidating the cache explicitly with
+`getRelated()->unset('profile')` also discards that pending assignment without changing database rows.
 
 ## Explicit collection changes
 
@@ -109,7 +134,7 @@ $orm->lifecycle()->transaction($order, function () use ($order): void {
 
 The callback result is returned. Nested calls join the active context; their exceptions must propagate to its boundary
 to roll back the complete operation. The service resets its active context on both success and failure. Its `track()`,
-`removeChild()`, `cancelPendingInsert()` and `persistBatch()` methods are internal integration points for the ORM
+`linkChild()`, `removeChild()`, `cancelPendingInsert()` and `persistBatch()` methods are internal integration points for the ORM
 and relationships. A `persist()` called inside this service joins the active lifecycle transaction and tracks its
 pending entities, even when they have no loaded child relationship themselves.
 
