@@ -150,6 +150,9 @@ graph may also be saved from the child side. Resolved one-to-one directions part
 either side; an invalid child write also rolls back a new parent. Deferred batches prioritize materialized parent roots
 even when a child was queued first. Existing related non-link field changes still use `save(cascade: true)`.
 
+For the complete sequence from assignment to commit or rollback, see the
+[end-to-end lifecycle workflow](relationship-lifecycle.md#end-to-end-workflow).
+
 The relation accepts the target type, its subclasses or `null`; it does not accept a collection. Declare a `UNIQUE`
 constraint on the child FK, or use a shared primary key, to enforce at most one child per parent in the database. Multiple
 children returned by a parent-side read are rejected rather than silently selecting one.
