@@ -341,6 +341,14 @@ $user->save();
 $user->getRelated()->unset('roles');
 ```
 
+For `BelongsToMany`, removing an entity from the collection removes its pivot link, not the target entity.
+For `HasMany`, the historical behavior deletes explicitly removed children when the parent is saved.
+Clearing the relation cache does not detach or delete anything in the database.
+
+The upcoming explicit `orphanRemoval` policy distinguishes detachment from deletion. See
+[Relationship lifecycle](relationship-lifecycle.md) for collection replacement, filtered views, the `Lifecycle` service,
+transaction boundaries and the planned v2 migration.
+
 ---
 
 ## Pivot Data (Many-to-Many)
