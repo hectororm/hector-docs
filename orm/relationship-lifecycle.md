@@ -109,17 +109,24 @@ $orm->lifecycle()->transaction($order, function () use ($order): void {
 
 The callback result is returned. Nested calls join the active context; their exceptions must propagate to its boundary
 to roll back the complete operation. The service resets its active context on both success and failure. Its `track()`,
-`removeChild()` and `cancelPendingInsert()` methods are internal integration points for the ORM and relationships.
+`removeChild()`, `cancelPendingInsert()` and `persistBatch()` methods are internal integration points for the ORM
+and relationships. A `persist()` called inside this service joins the active lifecycle transaction and tracks its
+pending entities, even when they have no loaded child relationship themselves.
 
 Saving a materialized graph containing a parent-child lifecycle relation runs its linking/removal writes and the parent
 save in one transaction. Direct `OneToMany::linkNative()` calls also protect their child operations. Removed links are
 released before new children are saved, allowing replacements under unique constraints.
+For `save(cascade: true)`, related saves remain within that same lifecycle transaction: an invalid field on an existing
+child rolls back earlier orphan removals as well. Batch preparation cancels never-persisted removed children before any
+queued insertion, including when the child was scheduled before its parent.
 
 On failure, the transaction restores the captured mapped properties (including generated identifiers and uninitialized
 typed properties), original ORM data, entity statuses, relation caches and collection removal tracking. Pending user
 edits and the desired replacement remain available for correction and retry. Custom non-mapped state or external side
-effects of event listeners are not undone. After-save/delete events are not after-commit notifications. A vetoed child
-removal or save aborts the lifecycle operation rather than silently discarding removal tracking.
+effects of event listeners are not undone. Snapshots preserve property values/references; they do not deep-copy arbitrary
+mutable user objects. After-save/delete events are not after-commit notifications. A vetoed child removal or save aborts
+the lifecycle operation rather than silently discarding removal tracking. A listener that restores a detached FK or
+redirects a newly attached child to another parent also aborts the operation.
 
 The transaction scope is **one connection**. Cross-connection materialized graphs are rejected before their captured
 entities are written; this feature does not provide distributed transactions. `persist()` batches containing lifecycle
