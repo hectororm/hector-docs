@@ -11,6 +11,7 @@ keywords:
   - column
   - index
   - foreign-key
+  - check-constraint
 ---
 
 # 📏 Schema
@@ -156,6 +157,8 @@ Represents a table and its structure.
     * `getType(): string`
     * `getCharset(): ?string`
     * `getCollation(): ?string`
+    * `getDefinition(): ?string` — native CREATE TABLE/VIEW SQL when available (since 1.5)
+    * `getTriggerDefinitions(): ?array` — attached trigger name => native CREATE TRIGGER SQL (since 1.5)
 
 * Columns:
 
@@ -179,6 +182,13 @@ Represents a table and its structure.
 * Other:
 
     * `getSchema(): Schema`
+
+* CHECK constraints (since 1.5):
+
+    * `hasCheckMetadata(): bool`
+    * `getChecks(): Generator<CheckConstraint>`
+    * `hasCheck(string $name): bool`
+    * `getCheck(string $name): CheckConstraint`
 
 > **Deprecated:** The `$quoted` parameter on `getSchemaName()`, `getName()`, `getFullName()`, and `getColumnsName()` is
 > deprecated. Use `Hector\Query\Statement\Quoted` for driver-aware identifier quoting.
@@ -270,6 +280,59 @@ Represents a table index.
 * `getTable(): Table`
 * `getColumns(): array`
 * `hasColumn(Column $column): bool`
+* `getDefinition(): ?string` — native CREATE INDEX SQL when available (since 1.5)
+* `isImplicit(): bool` — index created by a table constraint (since 1.5)
+
+### `Hector\Schema\CheckConstraint`
+
+> 🆕 **Info**: *Since version 1.5*
+
+Represents a SQL CHECK constraint, independently of the [plan operations](plan.md#check-constraints).
+
+| Method | Meaning |
+| --- | --- |
+| `getName(): ?string` | Database name, or `null` for an anonymous constraint |
+| `getExpression(): string` | SQL expression without the enclosing `CHECK (...)` |
+| `isEnforced(): ?bool` | `true`, `false`, or `null` when enforcement metadata is unknown |
+| `getTable(): Table` | Owning table; throws when the constraint is detached |
+
+```php
+$table = $schema->getTable('products');
+if ($table->hasCheckMetadata()) {
+    foreach ($table->getChecks() as $check) {
+        echo ($check->getName() ?? '(anonymous)') . ': ' . $check->getExpression() . "\n";
+    }
+}
+```
+
+`getChecks()` yields numeric keys and retains all anonymous or duplicate-named constraints.
+`getCheck()` throws `NotFoundException` for a missing name, or `SchemaException` for an ambiguous name.
+All CHECK accessors except `hasCheckMetadata()` throw `SchemaException` when metadata is unavailable.
+An empty list means introspection confirmed that the table has no CHECKs; it does not mean "not collected".
+
+MySQL 8.0.16+ exposes names, expressions and `ENFORCED` / `NOT ENFORCED` state. MariaDB exposes column and table
+CHECKs when `information_schema.CHECK_CONSTRAINTS` exists; older MariaDB releases without that catalog return
+unknown metadata, even when the engine enforces CHECKs. The catalog was backported to MariaDB 10.2.22.
+SQLite extracts named and anonymous CHECKs from CREATE TABLE SQL, retaining expression text, whitespace and
+comments. Virtual table declarations retain unknown CHECK metadata. Views have a known empty CHECK list.
+
+Enforcement metadata describes the constraint, not connection-level settings that can temporarily disable checks.
+MySQL/MariaDB may normalize expressions in their catalog. Unknown/unsupported engines are not assumed CHECK-free.
+Names, expressions, enforcement and table associations survive serialization. Older caches remain readable but
+have unknown CHECK metadata; regenerate them before a SQLite rebuild.
+
+### Native SQL definitions
+
+SQLite introspection also retains definitions needed for faithful rebuilding:
+
+- each table or view carries its native SQL in `Table::getDefinition()`;
+- each explicit index carries its own SQL in `Index::getDefinition()`; implicit indexes have no standalone SQL;
+- each table/view carries its attached triggers as `getTriggerDefinitions()` (`name => SQL`);
+- views remain schema objects, available through `$schema->getTables(Table::TYPE_VIEW)`.
+
+Definitions are strings, specific to their originating SQL dialect. They survive schema serialization.
+`null` indicates an unavailable definition or uncollected trigger metadata; `[]` confirms no triggers.
+Generators that do not collect these definitions leave them unavailable.
 
 ### `Hector\Schema\ForeignKey`
 
