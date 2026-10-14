@@ -9,6 +9,9 @@ keywords:
   - orphan-removal
   - transactions
   - rollback
+  - workflow
+  - snapshots
+  - serialization
   - migration
 ---
 
@@ -22,9 +25,101 @@ See [Relationships](relationships.md) for relationship declarations, loading and
 Cardinality, dependency direction and lifecycle are separate concerns. A child relationship does not, by its name alone,
 authorize deleting the target entity.
 
-## One-to-many policy
+## End-to-end workflow
 
-Configure `orphanRemoval` on `HasMany`, `Relationships::hasMany()` or `Relationship\OneToMany`:
+Using the [User/Profile child mapping](relationships.md#single-child-hasonechild), the usual entry point is still a normal
+entity save:
+
+```php
+$user = User::find(1);
+$replacement = new Profile();
+$replacement->bio = 'Updated profile';
+$user->profile = $replacement;
+$user->save(cascade: true);
+```
+
+The lifecycle service participates automatically when the materialized graph contains a lifecycle relation, such as
+`HasMany`, `HasOneChild` or a `OneToOne` with a resolved direction. Applications can also open an
+[explicit lifecycle transaction](#explicit-lifecycle-transactions).
+
+### From assignment to commit
+
+1. **Record the intent.** Assignment changes the cached relation without writing SQL. `Related` records whether the old
+   child was loaded, its previous value when known, and removed intermediate assignments. Collections track explicit
+   removals in their detached list. Query hydration is not an assignment.
+2. **Enter the lifecycle context.** The service captures the known graph and opens a transaction, or a savepoint inside
+   a caller-owned transaction. Additional affected objects are tracked before the ORM mutates them. Nested saves share
+   the same lifecycle context.
+3. **Persist in dependency order.** For a parent-side relation, save the parent first. For a new parent, obtain its generated
+   identifier before linking the child. A child-side reference saves its parent as needed before writing the child.
+4. **Apply relationship changes.** Resolve an unloaded previous scalar child through the declared view. Detach or delete
+   it according to the [removal policy](#parent-child-policy), then propagate parent keys and save the replacement. Releasing
+   the old link first allows a replacement under a unique FK constraint. Existing related non-link changes are saved when
+   `cascade: true` is requested, within the same transaction.
+5. **Finish successfully.** Clear processed assignment/removal tracking and commit the transaction. For a caller-owned
+   transaction, release the savepoint; the caller still controls the outer commit. Rollback snapshots remain available
+   until the operation has successfully finished.
+
+For a new parent and child, the write order is:
+
+```text
+INSERT parent
+    -> retrieve parent identifier
+    -> assign identifier to child linking columns
+    -> INSERT child
+    -> commit
+```
+
+### If a write fails
+
+The failure propagates to the lifecycle boundary, which rolls back SQL and restores the captured in-memory state.
+For the replacement example above:
+
+- The old profile exists again in the database if its removal had already been executed.
+- Generated identifiers, linking values, original ORM data and storage statuses revert to their captured values.
+- `$user->profile` still references `$replacement`, because that was the desired value **before** `save()` started.
+- The assignment journal again describes the pending replacement, so correcting the failure and calling `$user->save()`
+  again can retry the operation.
+
+Snapshots restore the state at capture time. Changes made *after* that capture inside an explicit transaction callback
+may therefore be undone. See [Atomic writes and rollback](#atomic-writes-and-rollback) for the transaction boundaries and
+the distinction from PHP serialization.
+
+### Deferred writes
+
+```php
+$user = new User();
+$user->name = 'Example';
+$profile = new Profile();
+$profile->bio = 'Hello';
+$user->profile = $profile;
+
+$orm->save($profile); // Queue the child first, without writing it yet.
+$orm->save($user);
+$orm->persist();
+```
+
+For a lifecycle batch, the service captures pending state, cancels never-persisted children already removed from their
+relations, and starts with the materialized parent roots. Their linking operations persist descendants in dependency
+order. A `persist()` inside an active lifecycle transaction joins that context.
+
+The dependency comes from the declared, materialized relationship graph: queuing an unattached child alone does not
+identify a parent for it.
+
+### Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| Relationships | Column mappings, dependency direction and identification of affected children. |
+| `Related` and collections | Current relation values and explicit assignment/removal intent. |
+| `Lifecycle` | Apply lifecycle policies and orchestrate the operation. |
+| `LifecycleTransaction` | Database transaction/savepoint, snapshots and rollback restoration. |
+| `Orm` and mappers | Schedule entities and execute their inserts, updates and deletes. |
+
+## Parent-child policy
+
+Configure `orphanRemoval` on `HasMany` or `HasOneChild`, or on their programmatic declarations. Both parent-side scalar
+and collection relationships use the same `Lifecycle` service:
 
 ```php
 use Hector\Orm\Attributes as Orm;
@@ -41,13 +136,37 @@ use Hector\Orm\Attributes as Orm;
 | --- | --- |
 | `false` | Clear its linking columns and save it. Required linking columns or primary-key columns prevent detachment and produce a `RelationException`. |
 | `true` | Delete it through the ORM. |
-| Omitted / `null` (before v2) | Preserve historical deletion of detached children. |
+| Omitted / `null` on `HasMany` (before v2) | Preserve historical deletion of detached children. |
+| Omitted / `null` on `HasOneChild` | Default to `false`: detach rather than delete. |
 
-The omitted-policy default is a **deprecated compatibility behavior**. Set `orphanRemoval: true` explicitly to preserve
-deletion when upgrading to v2. The v2 target default is `false`.
+The omitted-policy default on `HasMany` is a **deprecated compatibility behavior**. Set `orphanRemoval: true` explicitly to
+preserve deletion when upgrading to v2. The v2 target default is `false` for both parent-side relation types.
 
-The shared lifecycle implementation is also the foundation for the parent-side scalar relation tracked in
-[issue #135](https://github.com/hectororm/hectororm/issues/135). `HasOneChild` is not introduced by this change.
+See [HasOneChild](relationships.md#single-child-hasonechild) for the scalar relation introduced by
+[issue #135](https://github.com/hectororm/hectororm/issues/135).
+
+## Explicit scalar changes
+
+```php
+$user->profile = null;          // Detach or delete the previous profile according to its policy.
+$user->save();
+
+$user->profile = new Profile(); // A replacement releases the previous unique link first.
+$user->profile->bio = 'New';
+$user->save();
+```
+
+An explicit scalar assignment resolves the previous child when needed, even if it was never loaded. This differs from
+collection replacement: a scalar relation describes at most one child, whereas an unloaded collection may contain
+arbitrarily many unseen members.
+
+The lookup respects the declared relation view. A hidden child is preserved; its unique FK may then prevent insertion of
+a replacement. Reading an absent/filtered-out child alone never schedules removal. Reassigning the same persisted child
+does not delete it, and replacing an intermediate unsaved assignment does not delete an unrelated persisted entity that
+was never linked by that assignment.
+
+Failed persistence restores the old child state and pending assignment for retry. Invalidating the cache explicitly with
+`getRelated()->unset('profile')` also discards that pending assignment without changing database rows.
 
 ## Explicit collection changes
 
@@ -95,8 +214,28 @@ Inverting a relationship does not copy its deletion policy to the opposite direc
 ## Atomic writes and rollback
 
 `Orm::lifecycle()` exposes the `Hector\Orm\Lifecycle` service associated with that ORM instance. It orchestrates child
-detachment/removal, change tracking and the active transaction context. Normal entity saves invoke it automatically.
+detachment/removal, change tracking and the active transaction context. Entity saves invoke it automatically for
+materialized lifecycle graphs.
 The underlying `Storage\LifecycleTransaction` handles snapshots and database transaction/savepoint mechanics.
+
+### Transaction snapshots and PHP serialization
+
+`Related`, ORM `Collection` and `EntityData` implement the internal
+`Hector\Orm\Storage\LifecycleSnapshotInterface` contract:
+
+- `lifecycleSnapshot()` captures the state owned by the participant, including pending changes needed for rollback.
+- `restoreLifecycleSnapshot()` restores that state on the same instance without issuing SQL or scheduling new mutations.
+
+The transaction uses this contract rather than calling `__serialize()` or `__unserialize()`. Snapshot arrays may retain
+object references; they are process-local rollback state, not a transport or cache format. Mapped entity properties and
+storage statuses are also captured by the transaction.
+
+PHP serialization of `Related` keeps its existing `related` payload. The new scalar assignment journal (`assignments`)
+is deliberately excluded and is empty after unserialization; serializing an entity does not clear the journal on the
+original live object. A native serialization round-trip preserves cached relation values, but does not transfer a complete
+ORM unit of work. Reload entities in the receiving ORM and explicitly reapply intended assignments before persisting them.
+
+### Explicit lifecycle transactions
 
 An explicit operation can use the same service:
 
@@ -109,7 +248,7 @@ $orm->lifecycle()->transaction($order, function () use ($order): void {
 
 The callback result is returned. Nested calls join the active context; their exceptions must propagate to its boundary
 to roll back the complete operation. The service resets its active context on both success and failure. Its `track()`,
-`removeChild()`, `cancelPendingInsert()` and `persistBatch()` methods are internal integration points for the ORM
+`linkChild()`, `removeChild()`, `cancelPendingInsert()` and `persistBatch()` methods are internal integration points for the ORM
 and relationships. A `persist()` called inside this service joins the active lifecycle transaction and tracks its
 pending entities, even when they have no loaded child relationship themselves.
 
