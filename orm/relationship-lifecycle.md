@@ -17,7 +17,7 @@ keywords:
 
 # Relationship lifecycle
 
-> **Unreleased:** The explicit lifecycle policies and service described here accompany
+> **Available since v1.5.0:** The explicit lifecycle policies and service described here were introduced in
 > [HectorORM PR #148](https://github.com/hectororm/hectororm/pull/148).
 
 See [Relationships](relationships.md) for relationship declarations, loading and query options.

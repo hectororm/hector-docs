@@ -26,7 +26,7 @@ and support named parameters.
 | Attribute       | Purpose                                  |
 |-----------------|------------------------------------------|
 | `HasOne`        | References one entity through a local foreign key |
-| `HasOneChild`   | Defines a single child with the foreign key on the target (unreleased) |
+| `HasOneChild`   | Defines a single child with the foreign key on the target (available since v1.5.0) |
 | `HasMany`       | Defines a one-to-many relationship       |
 | `BelongsToMany` | Defines a many-to-many link via pivot    |
 | `BelongsTo`     | Derives the inverse of a declared relationship |
@@ -105,7 +105,7 @@ Use filtering parameters directly to restrict results statically (e.g. only acti
 
 ## Single child: HasOneChild
 
-> **Unreleased:** This API is introduced by [issue #135](https://github.com/hectororm/hectororm/issues/135).
+> **Available since v1.5.0:** This API addresses [issue #135](https://github.com/hectororm/hectororm/issues/135).
 
 Use `HasOneChild` when the current entity is the parent and the foreign key belongs to its single child:
 
@@ -471,7 +471,7 @@ For `BelongsToMany`, removing an entity from the collection removes its pivot li
 For `HasMany`, the historical behavior deletes explicitly removed children when the parent is saved.
 Clearing the relation cache does not detach or delete anything in the database.
 
-The upcoming explicit `orphanRemoval` policy distinguishes detachment from deletion. See
+The explicit `orphanRemoval` policy, available since v1.5.0, distinguishes detachment from deletion. See
 [Relationship lifecycle](relationship-lifecycle.md) for collection replacement, filtered views, the `Lifecycle` service,
 transaction boundaries and the planned v2 migration.
 
