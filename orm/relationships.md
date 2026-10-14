@@ -56,6 +56,72 @@ These optional named parameters can be used to filter or shape the relationship:
 
 ---
 
+## Inverse relationship resolution
+
+> **Unreleased:** The initialization behavior described here is introduced by
+> [issue #153](https://github.com/hectororm/hectororm/issues/153).
+
+`BelongsTo` derives a relationship by reversing another declaration. Use `foreignName` to select that declaration on
+the target entity. Relationship attributes are discovered before their dependencies are resolved, so an inverse can
+appear before its concrete definition, including on the same entity:
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\Table('categories')]
+#[Orm\BelongsTo(target: Category::class, name: 'children', foreignName: 'parent')]
+#[Orm\HasOne(target: Category::class, name: 'parent', columns: ['parent_id' => 'id'])]
+class Category extends MagicEntity {}
+```
+
+Here, `categories.id` is the primary key and nullable `categories.parent_id` references it. `parent` supplies the
+concrete mapping; `children` reverses it. Either attribute order works. Dependencies between different entity mappers
+and chains of inversions also resolve when they ultimately reach a concrete relationship definition.
+
+### Dependency cycles
+
+A loop consisting only of inversions cannot supply its own mapping. For example, if `User.articles` reverses
+`Article.author` and `Article.author` reverses `User.articles`, resolution throws `RelationException` with a path:
+
+```text
+Circular relationship dependency: User.articles -> Article.author -> User.articles
+```
+
+Messages use fully qualified entity class names. Self-references and bidirectional navigation are valid when a concrete
+definition anchors the dependency chain, as in the category example above.
+
+### Lookup and validation timing
+
+The default mapper's `getRelationships()` discovers attributes and returns a registry. Individual relationships are
+constructed when requested through `get()` or selected by `getWith()`, including accesses triggered by entity navigation.
+Their attribute options and clauses are applied before a resolved relationship becomes accessible from the cache.
+
+- Attribute-constructor errors still occur during discovery. Errors from relationship construction, options, clauses,
+  or dependency resolution occur when the affected relationship is resolved, rather than simply when the registry is obtained.
+- `exists()` and `count()` include discovered declarations without constructing them. They do not validate the relationships.
+- A named `getWith()` lookup checks that the declaration exists and targets the requested entity. As before, a supplied
+  name takes precedence over its optional column filter.
+- An unnamed lookup considers every declaration targeting the requested entity. Multiple candidates are ambiguous even
+  if only one has been constructed. Supply `foreignName` when declaring an inverse with several possible opposite relations.
+- Column-filtered lookups resolve candidates as needed to compare their source columns. Already available column metadata
+  can exclude an unrelated in-progress relationship without resolving it.
+- Failed initialization is not cached as a completed relationship. A later access retries initialization and either succeeds
+  or reports the error again. Unrelated relationships can still be resolved independently.
+
+Programmatic declarations remain immediate and configurable:
+
+```php
+$relationships->hasMany(Comment::class, 'comments', ['id' => 'article_id'])->orderBy('created_at', 'DESC');
+```
+
+Custom relationship attributes continue to use `addRelationship()` and `addClauses()`, and custom mappers can extend
+`getRelationships()`. These hooks must account for attribute relationships now being constructed on demand. PHP declarations
+inside a mapper or custom hook become available only after that code executes; the resolver does not discover future
+programmatic calls. Direct calls to an attribute's `init()` remain immediate.
+
+---
+
 ## One-to-One / Many-to-One
 
 A `HasOne` relationship references one instance of another entity, with the foreign key stored on the **current entity**.
