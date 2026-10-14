@@ -29,7 +29,8 @@ and support named parameters.
 | `HasOneChild`   | Defines a single child with the foreign key on the target (unreleased) |
 | `HasMany`       | Defines a one-to-many relationship       |
 | `BelongsToMany` | Defines a many-to-many link via pivot    |
-| `BelongsTo`     | Derives the inverse of a declared relationship |
+| `BelongsTo`     | References a scalar parent by reusing an opposite mapping |
+| `InverseOf`     | Structurally reverses an explicitly named relationship (unreleased) |
 
 ### Parameters
 
@@ -56,12 +57,96 @@ These optional named parameters can be used to filter or shape the relationship:
 
 ---
 
+## Structural inversion: InverseOf
+
+> **Unreleased:** Introduced by [issue #145](https://github.com/hectororm/hectororm/issues/145).
+
+Use `InverseOf` for generic structural inversion. `target`, `name`, and `foreignName` are all required:
+
+```php
+#[Orm\HasOne(target: User::class, name: 'author', columns: ['author_id' => 'id'])]
+class Article extends MagicEntity {}
+
+#[Orm\InverseOf(
+    target: Article::class,
+    name: 'articles',
+    foreignName: 'author',
+    where: ['published' => true],
+    orderBy: ['created_at' => 'DESC'],
+)]
+class User extends MagicEntity {}
+```
+
+The programmatic equivalent returns a configurable relationship immediately:
+
+```php
+$relationships->inverseOf(Article::class, 'articles', 'author')
+    ->whereEquals(['published' => true])
+    ->orderBy('created_at', 'DESC');
+```
+
+| Referenced relationship | Structural inverse |
+| --- | --- |
+| `ManyToOne` (`HasOne`) | `OneToMany` |
+| `OneToMany` (`HasMany`) | `ManyToOne` |
+| `OneToOne` | `OneToOne`, with resolved parent/child direction reversed |
+| `ManyToMany` | `ManyToMany`, with pivot mappings reversed |
+
+Entity endpoints and column mappings are swapped. Custom relationships are supported when `reverse($name)` returns
+a distinct, valid structural inverse with the requested name and swapped endpoints. Custom implementations are responsible
+for their cardinality, persistence direction, mappings and non-inheritance of destructive lifecycle policies.
+
+### Independent query views
+
+`where`, `orderBy`, `limit`, `groupBy` and `having` from the original declaration are not copied. Options on `InverseOf`
+apply to its own target. An inversion is not the set-theoretic inverse of a filtered or top-N query. Filters do not assign
+values to newly saved entities: set fields such as `published` explicitly.
+
+Existing eager-loading limit semantics remain: a limit on a batched related query does not promise top-N results per parent.
+Loading a collection does not prefill an opposite filtered relation in a way that bypasses its own query options.
+
+### Lifecycle and migration from BelongsTo
+
+`BelongsTo` remains supported without deprecation for scalar child-to-parent references, including the inverse of
+`HasMany` and `HasOneChild`. Its optional `foreignName` still reuses the named parent mapping.
+
+Collection-valued inversions and resolved parent-side `OneToOne` inversions now emit `E_USER_DEPRECATED` once per
+registry/relation name, while retaining their behavior before v2. Scalar cardinality alone does not establish a parent
+reference. An unresolved historical `OneToOne` direction retains its compatibility fallback without this deprecation;
+configure its direction explicitly to remove the uncertainty. Custom relation types with no recognized role are not
+classified solely from their name. Major-version enforcement is tracked in
+[issue #147](https://github.com/hectororm/hectororm/issues/147).
+
+For generic inversion, migrate:
+
+```php
+// Before: collection inversion with the historical detached-child deletion policy.
+#[Orm\BelongsTo(target: Article::class, name: 'articles', foreignName: 'author')]
+
+// After: preserve that deletion policy explicitly.
+#[Orm\InverseOf(
+    target: Article::class,
+    name: 'articles',
+    foreignName: 'author',
+    orphanRemoval: true,
+)]
+```
+
+If deletion is not intended, omit `orphanRemoval` or set it to `false`: new parent-side inversions detach children by
+default and reject detachment when linking columns cannot be cleared. Do not add `orphanRemoval: true` mechanically to
+all migrations: it is valid only for supported parent-to-child relations. Parent references and pivot relations reject
+explicit unsupported lifecycle options. Pivot detachment deletes links, never the shared target entity.
+
+`InverseOf` does not inherit destructive policies from the referenced declaration. It is also valid to replace a generic
+inversion with a concrete relation such as `HasMany` and an explicit mapping.
+See [Relationship lifecycle](relationship-lifecycle.md).
+
 ## Inverse relationship resolution
 
 > **Unreleased:** The initialization behavior described here is introduced by
 > [issue #153](https://github.com/hectororm/hectororm/issues/153).
 
-`BelongsTo` derives a relationship by reversing another declaration. Use `foreignName` to select that declaration on
+`InverseOf` derives a relationship by reversing another declaration. Its required `foreignName` selects that declaration on
 the target entity. Relationship attributes are discovered before their dependencies are resolved, so an inverse can
 appear before its concrete definition, including on the same entity:
 
@@ -70,7 +155,7 @@ use Hector\Orm\Attributes as Orm;
 use Hector\Orm\Entity\MagicEntity;
 
 #[Orm\Table('categories')]
-#[Orm\BelongsTo(target: Category::class, name: 'children', foreignName: 'parent')]
+#[Orm\InverseOf(target: Category::class, name: 'children', foreignName: 'parent')]
 #[Orm\HasOne(target: Category::class, name: 'parent', columns: ['parent_id' => 'id'])]
 class Category extends MagicEntity {}
 ```
@@ -130,7 +215,7 @@ For a single child whose foreign key is stored on the target, use [HasOneChild](
 ### Example: A User has one related Profile entity
 
 ```php
-use Hector\Orm\Attributes\BelongsTo;
+use Hector\Orm\Attributes\InverseOf;
 use Hector\Orm\Attributes\HasOne;
 use Hector\Orm\Attributes\Table;
 use Hector\Orm\Entity\MagicEntity;
@@ -144,7 +229,7 @@ use Hector\Orm\Entity\MagicEntity;
 class User extends MagicEntity {}
 
 #[Table('profiles')]
-#[BelongsTo(
+#[InverseOf(
     target: User::class,
     name: 'users',
     foreignName: 'profile',
