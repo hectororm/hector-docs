@@ -12,6 +12,7 @@ keywords:
   - alter-table
   - purge
   - compiler
+  - check-constraint
 ---
 
 # 📐 Plan
@@ -313,6 +314,72 @@ current column definition from the schema.
 
 > ℹ️ **Note**: The `CHANGE COLUMN` fallback requires a `Schema` to introspect the current column definition.
 > A `PlanException` is thrown if no schema is provided and the server does not support `RENAME COLUMN`.
+
+### CHECK constraints
+
+> 🆕 **Info**: *Since version 1.5*
+
+Use `TableOperation::addCheck(string $name, Raw|string $expression): static` on CREATE or ALTER, and
+`AlterTable::dropCheck(string $name): static` to remove a named constraint:
+
+```php
+use Hector\Schema\Plan\Plan;
+use Hector\Schema\Plan\Raw;
+
+$create = new Plan();
+$create->create('products')
+    ->addColumn('price', 'INTEGER')
+    ->addCheck('chk_price', 'price >= 0');
+
+// A separate plan for an existing table:
+$alter = new Plan();
+$alter->alter('products')
+    ->dropCheck('chk_price')
+    ->addCheck('chk_price', new Raw('price >= 1'));
+```
+
+Names and expressions must be non-empty after trimming; invalid input raises `PlanException` immediately.
+Names are quoted as identifiers. Both strings and `Raw` contain SQL expressions emitted verbatim, without
+value binding, function translation or automatic sanitization. Expressions must be valid for the target engine.
+Do not include the enclosing `CHECK (...)`. An expression evaluating to SQL `NULL` normally satisfies a CHECK;
+use a non-nullable column when `NULL` itself must be rejected.
+
+| Engine | CREATE | ALTER add | ALTER drop |
+| --- | --- | --- | --- |
+| MySQL 8.0.16+ | `CONSTRAINT name CHECK (...)` | `ADD CONSTRAINT name CHECK (...)` | `DROP CHECK name` |
+| MariaDB 10.2.1+ | `CONSTRAINT name CHECK (...)` | `ADD CONSTRAINT name CHECK (...)` | `DROP CONSTRAINT name` |
+| SQLite | `CONSTRAINT name CHECK (...)` | Table rebuild | Table rebuild |
+
+Older MySQL/MariaDB, Vitess and unknown capabilities are rejected rather than emitting an unenforced constraint.
+PostgreSQL has native CHECK support, but Hector does not currently provide a PostgreSQL plan compiler.
+The fluent API adds enforced constraints; it does not provide a `NOT ENFORCED` option.
+
+CHECK changes belong to the **structure phase**, retaining their order relative to other ALTER operations and
+surrounding raw statements. In particular, drop a CHECK before dropping a column it references, or before adding
+a replacement with the same name. They are not moved into the foreign-key pre/post phases.
+
+#### Online and offline capabilities
+
+With a connection, `AutoCompiler` resolves the engine and version automatically. Offline MySQL/MariaDB callers
+must explicitly provide capabilities:
+
+```php
+use Hector\Connection\Driver\DriverInfo;
+use Hector\Schema\Plan\Compiler\MySQLCompiler;
+
+$capabilities = (new DriverInfo('mysql', '8.0.16'))->getCapabilities();
+$compiler = new MySQLCompiler($capabilities);
+$statements = [...$create->getStatements($compiler)];
+```
+
+Use `DriverInfo('mariadb', '10.5.0')` for MariaDB. `new MySQLCompiler()` remains usable for ordinary operations,
+but CHECK compilation without capabilities raises `PlanException`. Custom `DriverCapabilities` implementations
+must implement `hasCheckConstraints()` and `hasDropCheck()`.
+
+`new SqliteCompiler()` can compile CHECKs in CREATE TABLE offline. SQLite ALTER requires a current `Schema`,
+including complete [CHECK metadata](schema.md#hectorschemacheckconstraint), to rebuild the existing table.
+Named and anonymous CHECKs survive unrelated rebuilds; anonymous constraints have no synthetic name for `dropCheck()`.
+Missing or ambiguous CHECK names are rejected during SQLite rebuild compilation.
 
 ### Purging a table
 
@@ -689,6 +756,13 @@ which is the safest position for structural changes.
 | `addForeignKey($name, $columns, $referencedTable, $referencedColumns, ...)` | Add a foreign key  |
 | `dropForeignKey($foreignKey)`                                               | Drop a foreign key |
 
+**CHECK operations (since 1.5):**
+
+| Method | Description |
+| --- | --- |
+| `addCheck(string $name, Raw\|string $expression): static` | Add a named CHECK (CREATE and ALTER) |
+| `dropCheck(string $name): static` | Drop a named CHECK (ALTER only) |
+
 **Trigger operations:**
 
 | Method                                                | Description                                                    |
@@ -792,7 +866,8 @@ With a schema, the compiler will:
   instead of failing
 - **Use table rebuild** for SQLite when the operation requires it (e.g., `MODIFY COLUMN`, `ADD/DROP FOREIGN KEY`)
 
-Without a schema, all operations are compiled optimistically — the compiler assumes the database supports them natively.
+Many operations can compile without a schema. SQLite CHECK alterations and generated-column rebuilds require one
+and raise `PlanException` when it is missing. MySQL/MariaDB CHECK compilation requires explicit enforcement capabilities.
 
 > ⚠️ **Warning**: The schema represents the database state **before** the plan is executed. It may become stale
 > after execution. If you need to run multiple plans sequentially, regenerate the schema between each one.
@@ -804,7 +879,7 @@ Without a schema, all operations are compiled optimistically — the compiler as
 `Plan` automatically reorders operations to avoid constraint violations and dependency issues:
 
 1. **Pre-operations** (global): `DisableForeignKeyChecks`, `DROP FOREIGN KEY`, `DROP TRIGGER` — from all entries
-2. **Structure + Raw** (in declaration order): `CREATE/ALTER/DROP TABLE`, columns, indexes, data migrations, views, and
+2. **Structure + Raw** (in declaration order): `CREATE/ALTER/DROP TABLE`, columns, indexes, CHECKs, data migrations, views, and
    raw SQL statements
 3. **Post-operations** (global): `ADD FOREIGN KEY`, `CREATE TRIGGER`, `EnableForeignKeyChecks` — from all entries
 
@@ -847,7 +922,7 @@ foreach ($plan->getStatements($compiler) as $sql) {
 ## SQLite: table rebuild
 
 SQLite has limited `ALTER TABLE` support — it cannot modify columns, add STORED generated columns, or add or drop
-foreign keys. When these operations are detected and a `Schema` is available, the `SqliteCompiler` automatically
+foreign keys or CHECK constraints. When these operations are detected and a `Schema` is available, the `SqliteCompiler` automatically
 generates a **table rebuild sequence**:
 
 1. `PRAGMA foreign_keys = OFF`
@@ -855,7 +930,7 @@ generates a **table rebuild sequence**:
 3. `INSERT INTO ... SELECT ...` to migrate data from the original table
 4. `DROP TABLE` the original table
 5. `ALTER TABLE ... RENAME TO ...` the temporary table to the original name
-6. Recreate non-primary indexes
+6. Recreate non-primary indexes and attached triggers
 7. `PRAGMA foreign_keys = ON`
 
 The compiler handles this sequence from the supplied `Schema` and the requested operations.
@@ -869,16 +944,17 @@ $plan->alter('users', function ($table) {
 });
 
 // On MySQL: ALTER TABLE users MODIFY COLUMN ..., ADD CONSTRAINT ...
-// On SQLite: Full table rebuild sequence (7 statements)
+// On SQLite: A table rebuild sequence
 foreach ($plan->getStatements($compiler, $schema) as $sql) {
     $connection->execute($sql);
 }
 ```
 
-> ⚠️ **Warning**: Table rebuild requires a `Schema`. Without it, the SQLite compiler will attempt native `ALTER TABLE`
-> statements that may fail.
+Table rebuild requires a current `Schema` with known CHECK metadata, including a confirmed-empty list when there
+are no constraints. Regenerate old serialized schemas before rebuilding. Manually constructed tables must supply
+their complete CHECK list via the `checks:` constructor argument.
 
-For generated-column operations, adding STORED columns or modifying generated definitions without the required
+For CHECK alterations, adding STORED columns or modifying generated definitions without the required
 schema raises a `PlanException` rather than emitting an unsupported native ALTER statement. Supply a current schema
 snapshot for the existing table, including the runner's `schema` argument when using `MigrationRunner`.
 
@@ -892,9 +968,36 @@ names, CAST types and collation names. An ambiguous unquoted keyword reference r
 native rename and refresh the schema before rebuilding in that case. Rebuilds with no surviving writable destination
 column also raise a `PlanException` instead of falling back to an incorrect `SELECT *` copy.
 
-SQLite cannot change `PRAGMA foreign_keys` inside an active transaction. When a rebuild needs foreign-key checks
-disabled, arrange that before starting the transaction (including before `MigrationRunner::up()`), and restore the
-connection's setting afterwards. The PRAGMA statements inside a plan cannot disable checks in an existing transaction.
+#### CHECK preservation and fidelity
+
+CHECK-only changes use the native CREATE TABLE definition retained by SQLite introspection. This path also allows
+index changes and a table rename. It preserves named/anonymous CHECKs, column collations, conflict clauses,
+foreign-key clauses, generated definitions, `STRICT` and `WITHOUT ROWID` options. Explicit indexes (including
+expression/partial indexes) and attached triggers are recreated from their own definitions. Hidden rowids and
+AUTOINCREMENT sequence history are retained; generated destination values are recalculated during the copy.
+
+Column/foreign-key changes use a structured rebuild. Column renames update retained CHECK expressions; dropping
+a column still referenced by a CHECK raises `PlanException`. Drop its named CHECK first in the same `alter()`.
+The compiler refuses transformations it cannot reproduce faithfully, including unsupported table clauses,
+column rename/drop with attached triggers, and unsafe expression/partial-index rewrites. Dependent views also
+prevent rebuilding; drop those dependencies, refresh the schema, rebuild, then recreate them in separate migrations.
+An implicit index cannot be altered independently of its constraint.
+
+Combine changes to a table in one `alter()` group. A later rebuild of a table already structurally changed in the
+same plan is rejected because the supplied snapshot is stale. Raw DDL is not analyzed for schema changes: execute
+it separately and refresh the schema before a rebuild.
+
+#### Execution and transactions
+
+Use [MigrationRunner](migration.md#sqlite-rebuild-transactions) to execute rebuilds atomically. It disables foreign
+keys before starting its transaction, verifies integrity before committing, and restores the original setting.
+It also refreshes supplied SQLite metadata between executed migrations.
+
+If executing compiler output yourself, fully compile first, capture the original `foreign_keys` setting, disable it
+outside the transaction, and execute the rebuild statements inside a transaction. Run `PRAGMA foreign_key_check`
+before committing, roll back on any error, and restore the original setting after the transaction ends. The
+compiler's OFF/ON statements alone do not provide rollback or integrity validation, and an unconditional ON does
+not preserve an initially disabled setting. SQLite cannot change `foreign_keys` inside an active transaction.
 
 ---
 

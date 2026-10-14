@@ -260,6 +260,17 @@ $capabilities->hasJson();        // true
 | `hasWindowFunctions(): bool` | Whether SQL window functions are supported  |
 | `hasJson(): bool`            | Whether native JSON functions are supported |
 | `hasStrictMode(): bool`      | Whether strict SQL mode is enforced         |
+| `hasCheckConstraints(): bool` | Whether the engine/version enforces CHECK constraints (since 1.5) |
+| `hasDropCheck(): bool` | Whether native `ALTER TABLE ... DROP CHECK` syntax is supported (since 1.5) |
+
+**Interface change:** third-party `DriverCapabilities` implementations must implement both CHECK methods.
+Return `false` when support cannot be established.
+
+MySQL **8.0.16+** returns `true` for both. MariaDB **10.2.1+**, SQLite and PostgreSQL return `true` for CHECK
+support and `false` for `DROP CHECK`: MariaDB/PostgreSQL use `DROP CONSTRAINT`, while SQLite requires a rebuild.
+Older MySQL/MariaDB versions, Vitess and unknown engines return `false` for both.
+These capabilities describe engine support, not session overrides. PostgreSQL has native support but no Hector
+schema-plan compiler. See [CHECK compilation](plan.md#check-constraints) for online/offline usage.
 
 Since **1.5**, the concrete `Hector\Connection\Driver\SQLiteCapabilities` class also exposes
 `hasGeneratedColumns(): bool`, which returns `true` for SQLite **3.31.0 or newer**. This method is specific to SQLite

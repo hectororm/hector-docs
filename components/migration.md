@@ -11,6 +11,7 @@ keywords:
   - tracker
   - rollback
   - plan
+  - check-constraint
 ---
 
 # 🔄 Migration
@@ -590,18 +591,82 @@ $status = $runner->getStatus();
 
 ### Transaction safety
 
-Each migration is executed within a database transaction:
+For each non-empty migration, the runner first compiles the entire plan, then opens a transaction and executes its
+statements. Compilation errors therefore occur before any migration SQL is executed, even on engines with
+non-transactional DDL.
 
-1. `beginTransaction()`
-2. Execute all Plan statements
-3. `commit()`
-4. Mark applied/reverted in the tracker
+On transactional-DDL engines such as SQLite, tracking happens **before** commit. With `DbTracker` on the same
+connection, schema changes, copied data and the tracking record commit or roll back together. Other trackers do
+not participate in that database transaction. On MySQL/MariaDB, DDL implicitly commits and tracking happens after
+execution: a later failure can leave earlier DDL changes applied but the migration untracked.
 
-If any statement fails, the transaction is rolled back and a `MigrationException` is thrown with the original
-error as `previous`. The tracker is **not** updated on failure.
+On failure, the runner attempts rollback and throws `MigrationException` with the original error as `previous`,
+dispatching `MigrationFailedEvent`. Database-native DDL transaction rules determine what can actually be rolled back.
 
 > ℹ️ **Note**: Migrations that produce an empty Plan (no DDL operations) are still tracked — they are simply marked
 > as applied/reverted without opening a transaction.
+
+### CHECK migrations
+
+> 🆕 **Info**: *Since version 1.5*
+
+```php
+use Hector\Migration\ReversibleMigrationInterface;
+use Hector\Schema\Plan\Plan;
+
+class RequireNonNegativePrice implements ReversibleMigrationInterface
+{
+    public function up(Plan $plan): void
+    {
+        $plan->alter('products')->addCheck('chk_price', 'price >= 0');
+    }
+
+    public function down(Plan $plan): void
+    {
+        $plan->alter('products')->dropCheck('chk_price');
+    }
+}
+```
+
+Use `AutoCompiler` for a live connection. Offline MySQL/MariaDB compilers require explicit capabilities confirming
+enforcement: MySQL 8.0.16+ or MariaDB 10.2.1+. Older engines, Vitess and unknown capabilities fail explicitly.
+See [CHECK plans](plan.md#check-constraints) for expressions, ordering and SQLite rebuild restrictions.
+
+For SQLite ALTER, pass a current schema to the runner:
+
+```php
+use Hector\Migration\MigrationRunner;
+use Hector\Schema\Generator\Sqlite;
+use Hector\Schema\Plan\Compiler\AutoCompiler;
+
+$runner = new MigrationRunner(
+    provider: $provider,
+    tracker: $tracker,
+    compiler: new AutoCompiler($connection),
+    connection: $connection,
+    schema: (new Sqlite($connection))->generateSchema('main'),
+);
+```
+
+The runner refreshes supplied SQLite metadata before the next non-empty plan after an executed migration.
+Combine changes to one table in a single `alter()` group or use separate migrations; a second rebuild using a
+stale snapshot within the same plan is rejected. SQLite CHECK additions also fail explicitly if the connection
+has `PRAGMA ignore_check_constraints = ON`.
+
+### SQLite rebuild transactions
+
+When compiled statements contain foreign-key toggles (including those emitted by a rebuild), the runner:
+
+1. Records the original `PRAGMA foreign_keys` value and disables checks **before** starting its transaction.
+2. Executes the migration SQL, excluding those PRAGMA toggles from the transactional statements.
+3. Runs `PRAGMA foreign_key_check` before tracking/commit; violations fail the migration.
+4. Records the outcome and commits, or rolls back on failure.
+5. Restores the original foreign-key setting, whether initially enabled or disabled.
+
+This prevents dropping the original table during a rebuild from cascading deletions into referencing tables.
+Integrity checking covers the database, including when foreign-key enforcement was initially disabled. A rebuild
+inside a caller-owned transaction is rejected before execution, leaving that transaction open for its caller.
+The same lifecycle applies to `up()` and `down()`.
 
 ### Concurrency
 
@@ -640,9 +705,14 @@ In dry-run mode:
 
 - SQL statements are logged with a `[DRY-RUN]` prefix
 - Events are dispatched normally (listeners can inspect the plan)
-- No database changes are made
+- Migration SQL is not executed and connection PRAGMA settings are unchanged
 - No tracker updates are recorded
 - The return value is the list of migration identifiers that **would** be applied/reverted
+
+Dry-run compiles against the available schema snapshot; it does not simulate changes made by earlier dry-run
+migrations. A later CHECK drop or rebuild that depends on such changes can therefore fail compilation. Logged
+SQL is compiler output, not an executed integrity check. Reading a `DbTracker` may initialize its tracking table
+when automatic creation is enabled, even during dry-run.
 
 ---
 
