@@ -86,6 +86,23 @@ Converts formatted date/time strings to `DateTimeInterface` instances and back.
 > numeric/timestamp path now agrees with the string path instead of rendering UTC wall-clock time for a
 > `@timestamp` value.
 
+> 🆕 **Info**: *Since version 1.5*
+>
+> When writing to the database (`toSchema()`), date objects and strings carrying an explicit timezone or offset are
+> converted to the configured timezone (or the ambient PHP default), like numeric timestamps. Strings without a
+> timezone are interpreted in that timezone. Fractional seconds are kept according to `format`, and the caller's date
+> object is not modified.
+>
+> ```php
+> $type = new DateTimeType(timezone: new DateTimeZone('UTC'));
+>
+> $type->toSchema(new DateTimeImmutable('2025-07-04 11:00:00', new DateTimeZone('Europe/Paris')));
+> // '2025-07-04 09:00:00'
+>
+> $type->toSchema('2025-07-04T11:00:00+02:00');
+> // '2025-07-04 09:00:00'
+> ```
+
 #### Conversion
 
 | Database value          | PHP value                                  |
