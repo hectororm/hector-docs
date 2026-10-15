@@ -30,7 +30,7 @@ and support named parameters.
 | `HasMany`       | Defines a one-to-many relationship       |
 | `BelongsToMany` | Defines a many-to-many link via pivot    |
 | `BelongsTo`     | References a scalar parent by reusing an opposite mapping |
-| `InverseOf`     | Structurally reverses an explicitly named relationship (unreleased) |
+| `InverseOf`     | Structurally reverses an explicitly named relationship (available since v1.5.0) |
 
 ### Parameters
 
@@ -336,7 +336,7 @@ if ($comment->commentable_type === 'article') {
 
 ## Structural inversion: InverseOf
 
-> **Unreleased:** Introduced by [issue #145](https://github.com/hectororm/hectororm/issues/145).
+> **Available since v1.5.0:** Introduced by [issue #145](https://github.com/hectororm/hectororm/issues/145).
 
 Use `InverseOf` for generic structural inversion. `target`, `name`, and `foreignName` are all required:
 
@@ -422,7 +422,7 @@ See [Relationship lifecycle](relationship-lifecycle.md).
 
 ## Inverse relationship resolution
 
-> **Unreleased:** The initialization behavior described here is introduced by
+> **Available since v1.5.0:** The initialization behavior described here was introduced by
 > [issue #153](https://github.com/hectororm/hectororm/issues/153).
 
 `InverseOf` derives a relationship by reversing another declaration. Its required `foreignName` selects that declaration on
