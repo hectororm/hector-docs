@@ -31,6 +31,10 @@ When initializing the ORM via `OrmFactory::orm()`, you can pass the following op
 | `read_dsn` | `string` | No       | DSN for read-only replica                               |
 | `name`     | `string` | No       | Connection name (default: `'default'`)                  |
 | `log`      | `bool`   | No       | Enable query logging (default: `false`)                 |
+| `options`  | `array`  | No       | Driver-specific PDO options (since 1.5)                 |
+
+> 🆕 **Info**: *Since version 1.5* — `options` is forwarded to the created `Connection` as its PDO options. See
+> [PDO options](../components/connection.md#pdo-options).
 
 **Example with all options:**
 
@@ -45,6 +49,7 @@ $orm = OrmFactory::orm(
         'read_dsn' => 'mysql:host=replica;dbname=myapp',
         'name' => 'default',
         'log' => true,
+        'options' => [PDO::ATTR_TIMEOUT => 5],
         'schemas' => ['myapp'],
         'aliases' => [
             'myapp' => 'app', // Use 'app' as alias for 'myapp' schema

@@ -41,6 +41,7 @@ credentials, define a connection name, set up a read-only replica, or inject a l
 | `readDsn`  | `string` | `null`      | Optional DSN string for read operations              |
 | `name`     | `string` | `'default'` | Optional connection name                             |
 | `logger`   | `Logger` | `null`      | Optional logger instance to capture executed queries |
+| `options`  | `array`  | `[]`        | Driver-specific PDO options (since 1.5)              |
 
 ### Simple connection
 
@@ -79,6 +80,28 @@ $connection = new Connection(
 
 Read operations will use the read DSN until a write or transaction begins, after which the write DSN is used
 exclusively.
+
+### PDO options
+
+> 🆕 **Info**: *Since version 1.5*
+
+`options` is passed as the `$options` argument of the PDO constructor. The same options apply to the read/write and
+read-only connections, and are preserved when the connection is serialized.
+
+```php
+$connection = new Connection(
+    dsn: 'mysql:host=localhost;dbname=mydb',
+    username: 'root',
+    password: 'secret',
+    options: [
+        PDO::ATTR_TIMEOUT => 5,
+        // Driver-specific attributes are accepted as well (e.g. SSL options of pdo_mysql)
+    ],
+);
+```
+
+> ⚠️ **Warning**: Options such as `PDO::ATTR_AUTOCOMMIT` or `PDO::ATTR_ERRMODE` may interfere with the internal
+> transaction handling and should not be altered lightly.
 
 ---
 
