@@ -29,7 +29,8 @@ and support named parameters.
 | `HasOneChild`   | Defines a single child with the foreign key on the target (available since v1.5.0) |
 | `HasMany`       | Defines a one-to-many relationship       |
 | `BelongsToMany` | Defines a many-to-many link via pivot    |
-| `BelongsTo`     | Derives the inverse of a declared relationship |
+| `BelongsTo`     | References a scalar parent by reusing an opposite mapping |
+| `InverseOf`     | Structurally reverses an explicitly named relationship (unreleased) |
 
 ### Parameters
 
@@ -64,7 +65,7 @@ For a single child whose foreign key is stored on the target, use [HasOneChild](
 ### Example: A User has one related Profile entity
 
 ```php
-use Hector\Orm\Attributes\BelongsTo;
+use Hector\Orm\Attributes\InverseOf;
 use Hector\Orm\Attributes\HasOne;
 use Hector\Orm\Attributes\Table;
 use Hector\Orm\Entity\MagicEntity;
@@ -78,7 +79,7 @@ use Hector\Orm\Entity\MagicEntity;
 class User extends MagicEntity {}
 
 #[Table('profiles')]
-#[BelongsTo(
+#[InverseOf(
     target: User::class,
     name: 'users',
     foreignName: 'profile',
@@ -330,6 +331,158 @@ if ($comment->commentable_type === 'article') {
     $target = $comment->video;
 }
 ```
+
+---
+
+## Structural inversion: InverseOf
+
+> **Unreleased:** Introduced by [issue #145](https://github.com/hectororm/hectororm/issues/145).
+
+Use `InverseOf` for generic structural inversion. `target`, `name`, and `foreignName` are all required:
+
+```php
+#[Orm\HasOne(target: User::class, name: 'author', columns: ['author_id' => 'id'])]
+class Article extends MagicEntity {}
+
+#[Orm\InverseOf(
+    target: Article::class,
+    name: 'articles',
+    foreignName: 'author',
+    where: ['published' => true],
+    orderBy: ['created_at' => 'DESC'],
+)]
+class User extends MagicEntity {}
+```
+
+The programmatic equivalent returns a configurable relationship immediately:
+
+```php
+$relationships->inverseOf(Article::class, 'articles', 'author')
+    ->whereEquals(['published' => true])
+    ->orderBy('created_at', 'DESC');
+```
+
+| Referenced relationship | Structural inverse |
+| --- | --- |
+| `ManyToOne` (`HasOne`) | `OneToMany` |
+| `OneToMany` (`HasMany`) | `ManyToOne` |
+| `OneToOne` | `OneToOne`, with resolved parent/child direction reversed |
+| `ManyToMany` | `ManyToMany`, with pivot mappings reversed |
+
+Entity endpoints and column mappings are swapped. Custom relationships are supported when `reverse($name)` returns
+a distinct, valid structural inverse with the requested name and swapped endpoints. Custom implementations are responsible
+for their cardinality, persistence direction, mappings and non-inheritance of destructive lifecycle policies.
+
+### Independent query views
+
+`where`, `orderBy`, `limit`, `groupBy` and `having` from the original declaration are not copied. Options on `InverseOf`
+apply to its own target. An inversion is not the set-theoretic inverse of a filtered or top-N query. Filters do not assign
+values to newly saved entities: set fields such as `published` explicitly.
+
+Existing eager-loading limit semantics remain: a limit on a batched related query does not promise top-N results per parent.
+Loading a collection does not prefill an opposite filtered relation in a way that bypasses its own query options.
+
+### Lifecycle and migration from BelongsTo
+
+`BelongsTo` remains supported without deprecation for scalar child-to-parent references, including the inverse of
+`HasMany` and `HasOneChild`. Its optional `foreignName` still reuses the named parent mapping.
+
+Collection-valued inversions and resolved parent-side `OneToOne` inversions now emit `E_USER_DEPRECATED` once per
+registry/relation name, while retaining their behavior before v2. Scalar cardinality alone does not establish a parent
+reference. An unresolved historical `OneToOne` direction retains its compatibility fallback without this deprecation;
+configure its direction explicitly to remove the uncertainty. Custom relation types with no recognized role are not
+classified solely from their name. Major-version enforcement is tracked in
+[issue #147](https://github.com/hectororm/hectororm/issues/147).
+
+For generic inversion, migrate:
+
+```php
+// Before: collection inversion with the historical detached-child deletion policy.
+#[Orm\BelongsTo(target: Article::class, name: 'articles', foreignName: 'author')]
+
+// After: preserve that deletion policy explicitly.
+#[Orm\InverseOf(
+    target: Article::class,
+    name: 'articles',
+    foreignName: 'author',
+    orphanRemoval: true,
+)]
+```
+
+If deletion is not intended, omit `orphanRemoval` or set it to `false`: new parent-side inversions detach children by
+default and reject detachment when linking columns cannot be cleared. Do not add `orphanRemoval: true` mechanically to
+all migrations: it is valid only for supported parent-to-child relations. Parent references and pivot relations reject
+explicit unsupported lifecycle options. Pivot detachment deletes links, never the shared target entity.
+
+`InverseOf` does not inherit destructive policies from the referenced declaration. It is also valid to replace a generic
+inversion with a concrete relation such as `HasMany` and an explicit mapping.
+See [Relationship lifecycle](relationship-lifecycle.md).
+
+---
+
+## Inverse relationship resolution
+
+> **Unreleased:** The initialization behavior described here is introduced by
+> [issue #153](https://github.com/hectororm/hectororm/issues/153).
+
+`InverseOf` derives a relationship by reversing another declaration. Its required `foreignName` selects that declaration on
+the target entity. Relationship attributes are discovered before their dependencies are resolved, so an inverse can
+appear before its concrete definition, including on the same entity:
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\Table('categories')]
+#[Orm\InverseOf(target: Category::class, name: 'children', foreignName: 'parent')]
+#[Orm\HasOne(target: Category::class, name: 'parent', columns: ['parent_id' => 'id'])]
+class Category extends MagicEntity {}
+```
+
+Here, `categories.id` is the primary key and nullable `categories.parent_id` references it. `parent` supplies the
+concrete mapping; `children` reverses it. Either attribute order works. Dependencies between different entity mappers
+and chains of inversions also resolve when they ultimately reach a concrete relationship definition.
+
+### Dependency cycles
+
+A loop consisting only of inversions cannot supply its own mapping. For example, if `User.articles` reverses
+`Article.author` and `Article.author` reverses `User.articles`, resolution throws `RelationException` with a path:
+
+```text
+Circular relationship dependency: User.articles -> Article.author -> User.articles
+```
+
+Messages use fully qualified entity class names. Self-references and bidirectional navigation are valid when a concrete
+definition anchors the dependency chain, as in the category example above.
+
+### Lookup and validation timing
+
+The default mapper's `getRelationships()` discovers attributes and returns a registry. Individual relationships are
+constructed when requested through `get()` or selected by `getWith()`, including accesses triggered by entity navigation.
+Their attribute options and clauses are applied before a resolved relationship becomes accessible from the cache.
+
+- Attribute-constructor errors still occur during discovery. Errors from relationship construction, options, clauses,
+  or dependency resolution occur when the affected relationship is resolved, rather than simply when the registry is obtained.
+- `exists()` and `count()` include discovered declarations without constructing them. They do not validate the relationships.
+- A named `getWith()` lookup checks that the declaration exists and targets the requested entity. As before, a supplied
+  name takes precedence over its optional column filter.
+- An unnamed lookup considers every declaration targeting the requested entity. Multiple candidates are ambiguous even
+  if only one has been constructed. Supply `foreignName` when declaring an inverse with several possible opposite relations.
+- Column-filtered lookups resolve candidates as needed to compare their source columns. Already available column metadata
+  can exclude an unrelated in-progress relationship without resolving it.
+- Failed initialization is not cached as a completed relationship. A later access retries initialization and either succeeds
+  or reports the error again. Unrelated relationships can still be resolved independently.
+
+Programmatic declarations remain immediate and configurable:
+
+```php
+$relationships->hasMany(Comment::class, 'comments', ['id' => 'article_id'])->orderBy('created_at', 'DESC');
+```
+
+Custom relationship attributes continue to use `addRelationship()` and `addClauses()`, and custom mappers can extend
+`getRelationships()`. These hooks must account for attribute relationships now being constructed on demand. PHP declarations
+inside a mapper or custom hook become available only after that code executes; the resolver does not discover future
+programmatic calls. Direct calls to an attribute's `init()` remain immediate.
 
 ---
 
