@@ -268,6 +268,17 @@ The expression and storage mode survive serialization. Older schema caches deser
 regenerate those caches to discover generated columns. `Schema\Column` stores metadata independently of the
 [`Plan\Generated` declaration object](plan.md#generated-columns).
 
+#### SQLite column collations
+
+> 🆕 **Info**: *Since version 1.5*
+
+SQLite introspection reports explicitly declared column collations through `getCollation()`, for example `BINARY`,
+`NOCASE` or a custom collation declared with
+[`collation`](plan.md#column-character-set-and-collation). Columns without an explicit collation return `null`.
+SQLite has no per-column character set: `getCharset()` keeps reporting the database encoding for text columns.
+Collations of view results and expressions are not inferred as column declarations. Collations survive serialization
+and table rebuilds.
+
 ### `Hector\Schema\Index`
 
 Represents a table index.

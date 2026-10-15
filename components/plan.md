@@ -306,6 +306,70 @@ Use explicit SQL for operations that require engine-specific ALTER options.
 See [SQLite table rebuild](#sqlite-table-rebuild) for copying data and combined-rename behaviour, and
 [column introspection](schema.md#generated-column-metadata) for reading generated definitions back from the database.
 
+#### Column character set and collation
+
+> 🆕 **Info**: *Since version 1.5*
+
+`addColumn()` and `modifyColumn()` accept `charset: ?string = null` and `collation: ?string = null`.
+Names are native to the target database, not portable presets. Existing calls and table-level options keep their
+behavior.
+
+For example, store canonical textual UUIDs in an ASCII column on MySQL/MariaDB, while keeping the same migration
+executable on SQLite:
+
+```php
+use Hector\Schema\Plan\Plan;
+
+$plan = new Plan();
+$plan->create('documents', charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci')
+    ->addColumn('id', 'CHAR(36)', charset: 'ascii')
+    ->addColumn('title', 'VARCHAR(255)')
+    ->addIndex('uq_documents_id', ['id'], type: 'unique');
+
+$alter = new Plan();
+$alter->alter('documents')->modifyColumn('id', 'CHAR(36)', charset: 'ascii');
+```
+
+| Option | MySQL / MariaDB | SQLite |
+| --- | --- | --- |
+| `charset` | Emits `CHARACTER SET` with the native name | Ignored; no per-column character sets |
+| `collation` | Emits `COLLATE` with the native name | Emits `COLLATE`; the name must exist on the connection |
+
+ASCII is a storage choice, not a portable input validator: SQLite still accepts non-ASCII text. ASCII characters
+already use one byte each in UTF-8; declaring ASCII does not imply a universal fourfold space saving. Binary UUID
+storage is a separate representation.
+
+For explicit comparison behavior, choose a collation supported by your database:
+
+```php
+// MySQL / MariaDB:
+$table->addColumn('reference', 'VARCHAR(64)', charset: 'ascii', collation: 'ascii_bin');
+
+// SQLite:
+$table->addColumn('reference', 'VARCHAR(64)', collation: 'BINARY');
+```
+
+These are backend-specific alternatives, not equivalent portable presets. MySQL's `ascii_bin` and SQLite's `BINARY`
+differ on trailing spaces; SQLite's `NOCASE` only folds ASCII case and is not equivalent to a Unicode
+case-/accent-insensitive MySQL collation. Unknown or incompatible native names are rejected by the database, without
+an automatic fallback.
+
+**Defaults and modifications:**
+
+- On MySQL/MariaDB, when neither option is supplied, text columns inherit the table defaults. A charset without a
+  collation uses that charset's default collation; a collation without a charset selects its associated charset.
+  When both are supplied, they must be compatible.
+- SQLite continues to ignore table-level charset/collation options. Column comparisons use `BINARY` unless an
+  explicit column collation is supplied; there is no table-default inheritance.
+- `modifyColumn()` describes the complete new column definition. Repeat options you want to retain. Omitting both
+  returns to the table defaults on MySQL/MariaDB and the implicit `BINARY` collation on SQLite; it does not preserve
+  the modified column's previous options automatically.
+- The same options work on [generated](#generated-columns) text columns. Renames and unrelated table rebuilds preserve
+  existing column options.
+- SQLite column modification requires a [table rebuild](#sqlite-table-rebuild) with a current schema. Pass the schema
+  to `getStatements($compiler, $schema)` or use the migration runner with a supplied schema for transaction and
+  foreign-key management. Re-read metadata after structural changes.
+
 #### Rename column compatibility
 
 `renameColumn()` uses the modern `RENAME COLUMN` syntax by default. When the compiler detects an older server
@@ -733,6 +797,12 @@ which is the safest position for structural changes.
 > 🆕 **Info**: *Since version 1.4* — `$default` accepts a `Hector\Schema\Plan\Raw` expression (emitted
 > verbatim), and `$hasDefault` is now `?bool` (defaults to `null` = auto-detected). See
 > [Column defaults](#column-defaults).
+
+> 🆕 **Info**: *Since version 1.5* — `addColumn()` and `modifyColumn()` also accept `$useCurrentOnUpdate`,
+> `$generated`, `$charset` and `$collation`. See
+> [Automatic update timestamps](#automatic-update-timestamps-mysql--mariadb),
+> [Generated columns](#generated-columns) and
+> [Column character set and collation](#column-character-set-and-collation).
 
 **Column operations (ALTER only):**
 
