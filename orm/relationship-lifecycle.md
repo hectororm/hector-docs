@@ -17,18 +17,7 @@ keywords:
 
 # Relationship lifecycle
 
-## Inverse declarations (unreleased)
-
-`InverseOf` reuses relationship structure, not destructive lifecycle policies. A resulting parent-side `OneToMany` or
-`OneToOne` defaults to `orphanRemoval: false`; explicit `true` enables deletion of removed children. Child-to-parent
-references reject unsupported lifecycle options. A pivot inverse removes pivot links only.
-
-Before v2, deprecated collection-valued `BelongsTo` declarations retain their historical detached-child deletion policy.
-When migrating these declarations to `InverseOf`, specify `foreignName` and `orphanRemoval: true` if preserving that policy
-is intentional. Otherwise use the new non-destructive default. Filters remain read views, not ownership rules or assigned
-persistence values. See [the migration examples](relationships.md#lifecycle-and-migration-from-belongsto).
-
-> **Unreleased:** The explicit lifecycle policies and service described here accompany
+> **Available since v1.5.0:** The explicit lifecycle policies and service described here were introduced in
 > [HectorORM PR #148](https://github.com/hectororm/hectororm/pull/148).
 
 See [Relationships](relationships.md) for relationship declarations, loading and query options.
@@ -221,6 +210,19 @@ relationship removes pivot links, not the shared target entities. Passing a non-
 relationships throws a `RelationException`; it is not silently ignored.
 
 Inverting a relationship does not copy its deletion policy to the opposite direction.
+
+## Inverse declarations
+
+> **Available since v1.5.0:** Introduced by [issue #145](https://github.com/hectororm/hectororm/issues/145).
+
+`InverseOf` reuses relationship structure, not destructive lifecycle policies. A resulting parent-side `OneToMany` or
+`OneToOne` defaults to `orphanRemoval: false`; explicit `true` enables deletion of removed children. Child-to-parent
+references reject unsupported lifecycle options. A pivot inverse removes pivot links only.
+
+Before v2, deprecated collection-valued `BelongsTo` declarations retain their historical detached-child deletion policy.
+When migrating these declarations to `InverseOf`, specify `foreignName` and `orphanRemoval: true` if preserving that policy
+is intentional. Otherwise use the new non-destructive default. Filters remain read views, not ownership rules or assigned
+persistence values. See [the migration examples](relationships.md#lifecycle-and-migration-from-belongsto).
 
 ## Atomic writes and rollback
 
