@@ -17,6 +17,17 @@ keywords:
 
 # Relationship lifecycle
 
+## Inverse declarations (unreleased)
+
+`InverseOf` reuses relationship structure, not destructive lifecycle policies. A resulting parent-side `OneToMany` or
+`OneToOne` defaults to `orphanRemoval: false`; explicit `true` enables deletion of removed children. Child-to-parent
+references reject unsupported lifecycle options. A pivot inverse removes pivot links only.
+
+Before v2, deprecated collection-valued `BelongsTo` declarations retain their historical detached-child deletion policy.
+When migrating these declarations to `InverseOf`, specify `foreignName` and `orphanRemoval: true` if preserving that policy
+is intentional. Otherwise use the new non-destructive default. Filters remain read views, not ownership rules or assigned
+persistence values. See [the migration examples](relationships.md#lifecycle-and-migration-from-belongsto).
+
 > **Unreleased:** The explicit lifecycle policies and service described here accompany
 > [HectorORM PR #148](https://github.com/hectororm/hectororm/pull/148).
 
