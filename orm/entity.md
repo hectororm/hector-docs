@@ -230,6 +230,31 @@ $user->firstname = 'Modified';
 $user->refresh(); // Reloads original data from DB
 ```
 
+### Generated columns
+
+> 🆕 **Info**: *Since version 1.5*
+
+Generated columns (VIRTUAL or STORED, see [Plan](../components/plan.md#generated-columns)) are computed by the
+database. The ORM reads them like any other column but never writes them:
+
+- They are excluded from `INSERT` and `UPDATE` statements.
+- After a save, the entity is refreshed, so generated values reflect the source columns that were written.
+- A save that only changes generated values emits no `UPDATE`, but still refreshes the entity.
+
+```php
+// order_lines.total is generated as `quantity * unit_price`
+$line = new OrderLine();
+$line->quantity = 3;
+$line->unit_price = 5;
+$line->save();
+
+echo $line->total; // 15, computed by the database
+```
+
+With a classic `Entity`, a value assigned to a generated property is ignored when saving and replaced by the database
+value. A `MagicEntity` rejects the assignment immediately, including `null`, with an `OrmException` such as
+`Generated column "total" is read-only for "App\Entity\OrderLine" entity`.
+
 ### Loading relations on-demand
 
 Use `load()` to eagerly load relations on an existing entity instance. This is useful when you need to load relations
