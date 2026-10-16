@@ -197,6 +197,35 @@ Orm::get()->persist();
 > 💡 **Tip**: `Entity::save()` and `Entity::delete()` call `persist()` immediately. Use the deferred approach when you
 > need to group multiple operations in one transaction.
 
+#### Transactional callback
+
+> 🆕 **Info**: *Since version 1.6*
+
+`Orm::transaction()` runs a callback inside a transaction on every connection and returns its result. Use it to group
+entity operations with other queries:
+
+```php
+use Hector\Orm\Orm;
+
+$order = Orm::get()->transaction(function (Orm $orm): Order {
+    $order = new Order();
+    $order->reference = 'A-1';
+    $order->save();
+
+    $orm->getConnection()->execute('UPDATE stock SET quantity = quantity - 1 WHERE product_id = ?', [42]);
+
+    return $order;
+});
+```
+
+On failure, database changes are rolled back and the exception is rethrown.
+
+> ⚠️ **Warning**: Only the database is rolled back. The in-memory state of entities (generated keys, modified
+> properties, statuses) is **not** restored: reload them before reusing them.
+
+Inside an active transaction, `persist()` uses a savepoint: if it fails, only its own writes are rolled back and the
+caller transaction stays usable. See [Transactions](../components/connection.md#transactions) for nesting rules.
+
 ### Updating
 
 ```php
