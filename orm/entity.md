@@ -223,6 +223,20 @@ On failure, database changes are rolled back and the exception is rethrown.
 > ⚠️ **Warning**: Only the database is rolled back. The in-memory state of entities (generated keys, modified
 > properties, statuses) is **not** restored: reload them before reusing them.
 
+Use `attempts` to retry the transaction on deadlocks and other transient concurrency failures, including when they are
+wrapped in an `OrmException`. Since entity state is not restored, load or create entities **inside** the callback so
+that each attempt starts from fresh state:
+
+```php
+Orm::get()->transaction(function (): void {
+    $account = Account::find(1);
+    $account->balance -= 100;
+    $account->save();
+}, attempts: 3);
+```
+
+See [Retrying on concurrency failures](../components/connection.md#retrying-on-concurrency-failures).
+
 Inside an active transaction, `persist()` uses a savepoint: if it fails, only its own writes are rolled back and the
 caller transaction stays usable. See [Transactions](../components/connection.md#transactions) for nesting rules.
 
