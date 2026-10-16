@@ -195,6 +195,46 @@ This also applies to a transaction opened with `beginTransaction()` or directly 
 > ⚠️ **Warning**: DDL statements (`CREATE`, `ALTER`, `DROP`, ...) trigger an implicit `COMMIT` on MySQL/MariaDB, which
 > also discards savepoints. Work done before the DDL statement is committed and cannot be rolled back.
 
+#### Retrying on concurrency failures
+
+The `attempts` parameter retries the whole transaction when it fails with a transient concurrency error: deadlock,
+lock wait timeout, serialization failure or busy/locked SQLite database. Other exceptions are rethrown immediately,
+and the last exception is rethrown when all attempts fail.
+
+```php
+$connection->transaction(function (Connection $connection): void {
+    $connection->execute('UPDATE accounts SET balance = balance - 100 WHERE id = ?', [1]);
+    $connection->execute('UPDATE accounts SET balance = balance + 100 WHERE id = ?', [2]);
+}, attempts: 3);
+```
+
+Retries happen without delay. Nested transactions are never retried: these failures usually abort the outer
+transaction, which is the one to retry.
+
+> ⚠️ **Warning**: The callback is executed again on each attempt. Keep side effects outside the database (emails, HTTP
+> calls, files...) out of the callback, or make them idempotent.
+
+To build your own retry policy (delay, logging...), use `DriverInfo::isRetryable()`, which detects these errors for the
+current driver, including when the PDO exception is wrapped by another exception:
+
+```php
+try {
+    $connection->transaction($work);
+} catch (\Throwable $exception) {
+    if (false === $connection->getDriverInfo()->isRetryable($exception)) {
+        throw $exception;
+    }
+    // Schedule a new attempt
+}
+```
+
+| Driver          | Retryable errors                                                     |
+|-----------------|----------------------------------------------------------------------|
+| MySQL / MariaDB | Deadlock (`1213`), lock wait timeout (`1205`), SQLSTATE `40001`      |
+| PostgreSQL      | Serialization failure (`40001`), deadlock (`40P01`)                  |
+| SQLite          | `SQLITE_BUSY` (`5`), `SQLITE_LOCKED` (`6`), including extended codes |
+| Others          | SQLSTATE `40001`                                                     |
+
 ### Manual transactions
 
 ```php
@@ -233,13 +273,13 @@ commands; the next `beginTransaction()` opens a real transaction.
 
 ### Transaction API
 
-| Method                            | Description                                               |
-|-----------------------------------|-----------------------------------------------------------|
-| `transaction(callable $work)`     | Run the callback in a transaction (savepoint when nested) |
-| `beginTransaction()`              | Start a new transaction                                   |
-| `commit()`                        | Commit the current transaction                            |
-| `rollBack(?bool $allTransactions = null)` | Roll back all levels or only the current one         |
-| `inTransaction()`                 | Returns `true` if inside a transaction                    |
+| Method                                           | Description                                               |
+|--------------------------------------------------|-----------------------------------------------------------|
+| `transaction(callable $work, int $attempts = 1)` | Run the callback in a transaction (savepoint when nested) |
+| `beginTransaction()`                             | Start a new transaction                                   |
+| `commit()`                                       | Commit the current transaction                            |
+| `rollBack(?bool $allTransactions = null)`          | Roll back all levels or only the current one               |
+| `inTransaction()`                                | Returns `true` if inside a transaction                    |
 
 Match each `beginTransaction()` with a `commit()` or `rollBack(allTransactions: false)`.
 `rollBack(allTransactions: true)` closes all Hector-managed levels at once.
@@ -252,16 +292,19 @@ Use the `ConnectionSet` class to register and retrieve multiple named `Connectio
 
 ### ConnectionSet API
 
-| Method                                  | Description                                                       |
-|-----------------------------------------|-------------------------------------------------------------------|
-| `addConnection(Connection)`             | Register a `Connection` instance                                  |
-| `hasConnection(string)`                 | Check if a connection with the given name exists                  |
-| `getConnection(string $name = DEFAULT)` | Retrieve a named connection or the default one                    |
-| `transaction(callable $work)`           | Run the callback in a transaction on every connection (since 1.6) |
-| `rollBack(?bool $allTransactions = null)` | Forward the rollback scope to every connection |
+| Method                                           | Description                                                       |
+|--------------------------------------------------|-------------------------------------------------------------------|
+| `addConnection(Connection)`                      | Register a `Connection` instance                                  |
+| `hasConnection(string)`                          | Check if a connection with the given name exists                  |
+| `getConnection(string $name = DEFAULT)`          | Retrieve a named connection or the default one                    |
+| `transaction(callable $work, int $attempts = 1)` | Run the callback in a transaction on every connection (since 1.6) |
+| `rollBack(?bool $allTransactions = null)`          | Forward the rollback scope to every connection                    |
 
 > ⚠️ **Warning**: `ConnectionSet::transaction()` is not a distributed transaction. Connections are committed one after
 > the other: if a commit fails, the connections already committed are not rolled back.
+
+With `attempts`, the transaction is retried on every connection when any of them reports a retryable failure. No
+retry happens if a transaction was already active on one of the connections.
 
 ### Usage example
 
@@ -338,11 +381,12 @@ $capabilities->hasJson();        // true
 
 ### DriverInfo API
 
-| Method                 | Description                         |
-|------------------------|-------------------------------------|
-| `getDriver(): string`  | Name of the underlying PDO driver   |
-| `getVersion(): string` | Version string of the driver        |
-| `getCapabilities()`    | Returns `DriverCapabilities` object |
+| Method                                | Description                                                      |
+|---------------------------------------|------------------------------------------------------------------|
+| `getDriver(): string`                 | Name of the underlying PDO driver                                |
+| `getVersion(): string`                | Version string of the driver                                     |
+| `getCapabilities()`                   | Returns `DriverCapabilities` object                              |
+| `isRetryable(Throwable $error): bool` | Whether the error is a transient concurrency failure (since 1.6) |
 
 ### DriverCapabilities API
 
