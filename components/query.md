@@ -665,11 +665,11 @@ preventing concurrent modifications in transactional contexts.
 ```php
 $connection->beginTransaction();
 
-// Lock the row for update
+// Lock the row for update, waiting for concurrent transactions to release it
 $user = $queryBuilder
     ->from('users')
     ->where('id', 1)
-    ->fetchOne(lock: true);
+    ->fetchOne(lock: true, skipLocked: false);
 
 // Modify and save
 $queryBuilder->from('users')->where('id', 1)->update(['balance' => $user['balance'] - 100]);
@@ -679,15 +679,45 @@ $connection->commit();
 
 Available on:
 
-* `fetchOne(bool $lock = false)`
-* `fetchAll(bool $lock = false)`
-* `fetchColumn(int $column = 0, bool $lock = false)`
+* `fetchOne(bool $lock = false, ?bool $skipLocked = null)`
+* `fetchAll(bool $lock = false, ?bool $skipLocked = null)`
+* `fetchColumn(int $column = 0, bool $lock = false, ?bool $skipLocked = null)`
 
 > ⚠️ **Warning**: Locking requires an active transaction. The lock is released when the transaction is committed or
 > rolled back.
 
-> 💡 **Tip**: On databases that support it (MySQL 8+, PostgreSQL), `SKIP LOCKED` is automatically added to avoid blocking
-> on already-locked rows.
+### Skip locked rows
+
+With `skipLocked: true`, on databases that support it (MySQL 8.0+, MariaDB 10.6+, PostgreSQL 9.5+), `SKIP LOCKED` is
+added to the `FOR UPDATE` clause. Rows already locked by another transaction are then **excluded from the result** instead of being
+waited for: `fetchOne()` returns `null` for an existing row locked elsewhere.
+
+This is what you want for queue consumers (each worker picks rows that nobody else is processing), but **not** for
+read-modify-write operations (balances, counters, sessions…), where a locked row would wrongly look missing. Pass
+`skipLocked: false` to get a plain, blocking `FOR UPDATE`:
+
+```php
+// Queue consumer: grab pending jobs not already taken by another worker
+$jobs = $queryBuilder
+    ->from('jobs')
+    ->where('status', 'pending')
+    ->limit(10)
+    ->fetchAll(lock: true, skipLocked: true);
+
+// Read-modify-write: wait for the row to be released
+$account = $queryBuilder
+    ->from('accounts')
+    ->where('id', 1)
+    ->fetchOne(lock: true, skipLocked: false);
+```
+
+On drivers without `SKIP LOCKED` support (e.g. MySQL < 8.0), a plain `FOR UPDATE` is always emitted.
+
+> 🆕 **Info**: *Since version 1.6*
+>
+> The `skipLocked` parameter was added. Always pass it explicitly when locking: omitting it is **deprecated**
+> (`E_USER_DEPRECATED`) and behaves as `skipLocked: true` to preserve the previous behavior. In version 2.0, it will
+> default to `false` (blocking `FOR UPDATE`).
 
 > 🆕 **Info**: *Since version 1.4*
 >
