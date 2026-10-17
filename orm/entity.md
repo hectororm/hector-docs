@@ -237,6 +237,11 @@ Orm::get()->transaction(function (): void {
 
 See [Retrying on concurrency failures](../components/connection.md#retrying-on-concurrency-failures).
 
+> 💡 **Tip**: Entity events such as `EntityAfterSaveEvent` do not mean the data is committed. To trigger side
+> effects only after the commit, register them on the entity's connection with
+> [`afterCommit()`](../components/connection.md#after-commit-callbacks):
+> `$orm->getConnection()->afterCommit(fn() => $mailer->sendReceipt($order));`
+
 Inside an active transaction, `persist()` uses a savepoint: if it fails, only its own writes are rolled back and the
 caller transaction stays usable. See [Transactions](../components/connection.md#transactions) for nesting rules.
 

@@ -212,7 +212,8 @@ Retries happen without delay. Nested transactions are never retried: these failu
 transaction, which is the one to retry.
 
 > ⚠️ **Warning**: The callback is executed again on each attempt. Keep side effects outside the database (emails, HTTP
-> calls, files...) out of the callback, or make them idempotent.
+> calls, files...) out of the callback, make them idempotent, or defer them with
+> [after-commit callbacks](#after-commit-callbacks).
 
 To build your own retry policy (delay, logging...), use `DriverInfo::isRetryable()`, which detects these errors for the
 current driver, including when the PDO exception is wrapped by another exception:
@@ -234,6 +235,83 @@ try {
 | PostgreSQL      | Serialization failure (`40001`), deadlock (`40P01`)                  |
 | SQLite          | `SQLITE_BUSY` (`5`), `SQLITE_LOCKED` (`6`), including extended codes |
 | Others          | SQLSTATE `40001`                                                     |
+
+### After-commit callbacks
+
+> 🆕 **Info**: *Since version 1.6*
+
+`afterCommit()` defers a callback until the data is actually committed. Use it for side effects outside the database
+(notifications, messages, cache invalidation...), including from reusable code that may run inside nested
+transactions.
+
+```php
+$connection->transaction(function (Connection $connection) use ($mailer, $order): void {
+    $connection->execute('UPDATE orders SET status = ? WHERE id = ?', ['paid', $order->id]);
+
+    $connection->afterCommit(fn() => $mailer->sendReceipt($order));
+});
+// The receipt is sent here, once the transaction is committed
+```
+
+Callbacks run in registration order, once the outermost transaction managed by Hector is committed:
+
+| Situation                                          | Callbacks                                                    |
+|----------------------------------------------------|--------------------------------------------------------------|
+| Outermost transaction committed                    | Executed, in registration order                              |
+| Nested transaction committed (savepoint released)  | Kept, and executed with the parent transaction               |
+| Nested transaction rolled back                     | Discarded for this level; parent levels keep their callbacks |
+| Outermost transaction rolled back or commit failed | Discarded                                                    |
+| Failed attempt before a retry                      | Discarded; only the successful attempt's callbacks run       |
+| No active transaction                              | Executed immediately                                         |
+
+```php
+$connection->transaction(function (Connection $connection): void {
+    $connection->afterCommit(fn() => print "order\n");
+
+    try {
+        $connection->transaction(function (Connection $connection): void {
+            $connection->afterCommit(fn() => print "note\n");
+            throw new RuntimeException('Optional step failed');
+        });
+    } catch (RuntimeException) {
+        // The "note" callback is discarded with its savepoint
+    }
+});
+// Prints "order" only
+```
+
+The same rules apply to manual transactions: `commit()` runs the callbacks when it commits the outermost transaction.
+
+#### Callback failures
+
+Callbacks run after the commit: the data is **already committed** when a callback fails.
+
+- The exception is rethrown unchanged by `transaction()` or `commit()`, and the remaining callbacks are discarded.
+- The transaction is neither rolled back nor retried, even with `attempts` and a retryable exception.
+- The pending callbacks are removed before they run: a failure never leaves them queued for a later commit.
+
+Catch exceptions inside the callback when a failure must not reach the caller:
+
+```php
+$connection->afterCommit(function () use ($cache, $logger): void {
+    try {
+        $cache->invalidate('orders');
+    } catch (\Throwable $exception) {
+        $logger->error('Cache invalidation failed', ['exception' => $exception]);
+    }
+});
+```
+
+#### Limitations
+
+- **Not durable**: callbacks live in memory. They are lost if the process stops between the commit and their
+  execution. Use a transactional outbox when delivery must be guaranteed.
+- **External transactions**: Hector cannot observe the commit of a transaction opened directly on the PDO object.
+  `afterCommit()` throws a `LogicException` in that case, even inside Hector's nested levels.
+- **Implicit commits**: when a DDL statement implicitly commits the transaction (MySQL/MariaDB), the pending callbacks
+  are discarded, not executed.
+- **One connection**: callbacks are tied to the connection on which they are registered. `ConnectionSet` and `Orm` do
+  not provide `afterCommit()`: commits across several connections are not atomic.
 
 ### Manual transactions
 
@@ -276,6 +354,7 @@ commands; the next `beginTransaction()` opens a real transaction.
 | Method                                           | Description                                               |
 |--------------------------------------------------|-----------------------------------------------------------|
 | `transaction(callable $work, int $attempts = 1)` | Run the callback in a transaction (savepoint when nested) |
+| `afterCommit(callable $callback)`                | Run the callback after the outermost commit               |
 | `beginTransaction()`                             | Start a new transaction                                   |
 | `commit()`                                       | Commit the current transaction                            |
 | `rollBack(?bool $allTransactions = null)`          | Roll back all levels or only the current one               |
