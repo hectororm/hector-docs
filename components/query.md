@@ -655,6 +655,66 @@ $queryBuilder
 
 These shortcut methods do not affect the `QueryBuilder` instance, so it remains reusable for further operations.
 
+### Atomic increment / decrement
+
+> 🆕 **Info**: *Since version 1.6*
+
+Use `Increment` and `Decrement` as assignment values to update a column relative to its current value, in a single
+`UPDATE` statement and without reading the row first. This avoids lost updates when concurrent requests modify the
+same counter, stock or quota:
+
+```php
+use Hector\Query\Statement\Decrement;
+use Hector\Query\Statement\Increment;
+
+$affected = $queryBuilder
+    ->from('products')
+    ->where('id', 42)
+    ->where('stock', '>=', 5)
+    ->update([
+        'stock' => new Decrement(5),
+        'reserved' => new Increment(5),
+        'updated_at' => $now,
+    ]);
+// UPDATE products SET stock = stock - :_h_0, reserved = reserved + :_h_1, updated_at = :_h_2
+// WHERE id = :_h_3 AND stock >= :_h_4
+
+if (0 === $affected) {
+    // Not enough stock left: nothing was reserved
+}
+```
+
+The amount defaults to `1` and is always bound as a parameter. It accepts an `int`, a finite `float` or a numeric
+string; negative amounts and zero are allowed. Any other value (`NAN`, `INF`, `'abc'`, ...) throws an
+`InvalidArgumentException`.
+
+The column is rendered exactly as written in the assignment key, on both sides of the `=`. To quote it with the
+driver's identifier quote, use the list form with a `Quoted` column:
+
+```php
+use Hector\Query\Statement\Quoted;
+
+$queryBuilder->from('products')->where('id', 42)->update([
+    [new Quoted('stock'), new Decrement(1)],
+]);
+// UPDATE products SET `stock` = `stock` - :_h_0 WHERE id = :_h_1
+```
+
+`Increment` and `Decrement` are only valid as `UPDATE` assignment values: using them in an `INSERT` or in a condition
+throws an `InvalidArgumentException`.
+
+> ⚠️ **Warning**: These are query-level operations. Entities already loaded through the ORM are not refreshed, and no
+> per-entity lifecycle event is triggered.
+
+> 💡 **Tip**: Things to keep in mind:
+>
+> * **Affected rows**: MySQL/MariaDB report rows actually *changed*, while SQLite reports rows *matched*. An amount of
+>   `0` therefore returns `0` on MySQL/MariaDB.
+> * **Precision**: a `float` is converted to a string by PHP before being sent to the database. For `DECIMAL` columns,
+>   pass a numeric string (e.g. `new Increment('0.10')`) to keep exact precision.
+> * **Unsigned columns**: decrementing an `UNSIGNED` column below zero fails on MySQL/MariaDB in strict mode. Guard the
+>   update with a condition (e.g. `where('stock', '>=', $amount)`) and check the affected-row count.
+
 ---
 
 ## Locking rows
@@ -685,6 +745,9 @@ Available on:
 
 > ⚠️ **Warning**: Locking requires an active transaction. The lock is released when the transaction is committed or
 > rolled back.
+
+> 💡 **Tip**: For a simple arithmetic change such as the one above, an
+> [atomic increment / decrement](#atomic-increment--decrement) does the same in a single statement, without locking.
 
 ### Skip locked rows
 
