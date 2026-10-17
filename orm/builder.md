@@ -485,5 +485,9 @@ User::query()
 All filtering, ordering, joining, and limiting operations are passed to the underlying `QueryBuilder`, which can be used
 directly for low-level control.
 
+This includes [atomic increment / decrement](../components/query.md#atomic-increment--decrement) updates
+(`update(['stock' => new Decrement(1)])`). They run as a single query: loaded entities are not refreshed and no entity
+lifecycle event is triggered.
+
 If you need full SQL flexibility or want to decouple from ORM, refer to the
 standalone [QueryBuilder documentation](../components/query.md).
