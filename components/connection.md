@@ -152,7 +152,50 @@ $id = $connection->getLastInsertId();
 
 Ensure atomic operations using transactions.
 
-### Usage example
+### Transactional callback
+
+> 🆕 **Info**: *Since version 1.6*
+
+`transaction()` runs a callback inside a transaction and returns its result. The callback receives the connection.
+On success, the transaction is committed. On any exception, it is rolled back and the original exception is rethrown.
+
+```php
+$userId = $connection->transaction(function (Connection $connection): string {
+    $connection->execute('INSERT INTO users (name) VALUES (?)', ['Bob']);
+    $userId = $connection->getLastInsertId();
+    $connection->execute('INSERT INTO profiles (user_id) VALUES (?)', [$userId]);
+
+    return $userId;
+});
+```
+
+#### Nested transactions
+
+When a transaction is already active, `transaction()` uses a savepoint. A failing nested callback only discards its
+own work: the outer transaction stays active and can still be committed.
+
+```php
+$connection->transaction(function (Connection $connection): void {
+    $connection->execute('INSERT INTO orders (ref) VALUES (?)', ['A-1']);
+
+    try {
+        $connection->transaction(function (Connection $connection): void {
+            $connection->execute('INSERT INTO order_notes (ref) VALUES (?)', ['A-1']);
+            throw new RuntimeException('Optional step failed');
+        });
+    } catch (RuntimeException) {
+        // Only the note is rolled back
+    }
+});
+// The order is committed
+```
+
+This also applies to a transaction opened with `beginTransaction()` or directly on the PDO object.
+
+> ⚠️ **Warning**: DDL statements (`CREATE`, `ALTER`, `DROP`, ...) trigger an implicit `COMMIT` on MySQL/MariaDB, which
+> also discards savepoints. Work done before the DDL statement is committed and cannot be rolled back.
+
+### Manual transactions
 
 ```php
 $connection->beginTransaction();
@@ -161,23 +204,45 @@ try {
     $connection->execute('INSERT INTO profiles (user_id) VALUES (?)', [$connection->getLastInsertId()]);
     $connection->commit();
 } catch (\Throwable $e) {
-    $connection->rollBack();
+    $connection->rollBack(allTransactions: false);
     throw $e;
 }
 ```
 
+Since 1.6, nested `beginTransaction()` calls create savepoints, and `commit()` releases the current savepoint.
+Only the outermost Hector-owned transaction is actually committed. `transaction()` uses these same methods.
+
+Choose the rollback scope explicitly:
+
+```php
+$connection->rollBack(allTransactions: false); // Roll back only the current level
+$connection->rollBack(allTransactions: true);  // Roll back all Hector-managed levels
+```
+
+With only one Hector-managed level, both options have the same effect. If the transaction was opened directly on PDO,
+`beginTransaction()` creates a savepoint even at the first Hector level: committing or rolling back Hector's levels
+preserves the caller's PDO transaction.
+
+After an implicit DDL commit, `commit()` and `rollBack()` clear the obsolete nesting state without issuing transaction
+commands; the next `beginTransaction()` opens a real transaction.
+
+> **Migration to 2.0:** `$allTransactions = null` (the default) means `true` in 1.x and will mean `false` in 2.0.
+> Omitting it while several Hector transaction levels are active emits `E_USER_DEPRECATED` since 1.6.
+> Pass `allTransactions: true` to preserve full rollback, or `false` to isolate the current level.
+> `transaction()` already passes `false` explicitly.
+
 ### Transaction API
 
-| Method               | Description                            |
-|----------------------|----------------------------------------|
-| `beginTransaction()` | Start a new transaction                |
-| `commit()`           | Commit the current transaction         |
-| `rollBack()`         | Roll back the current transaction      |
-| `inTransaction()`    | Returns `true` if inside a transaction |
+| Method                            | Description                                               |
+|-----------------------------------|-----------------------------------------------------------|
+| `transaction(callable $work)`     | Run the callback in a transaction (savepoint when nested) |
+| `beginTransaction()`              | Start a new transaction                                   |
+| `commit()`                        | Commit the current transaction                            |
+| `rollBack(?bool $allTransactions = null)` | Roll back all levels or only the current one         |
+| `inTransaction()`                 | Returns `true` if inside a transaction                    |
 
-> ⚠️ **Warning**: Nested calls to `beginTransaction()` are ignored. Each transaction must be matched with a `commit()`
-> or
-> `rollBack()`.
+Match each `beginTransaction()` with a `commit()` or `rollBack(allTransactions: false)`.
+`rollBack(allTransactions: true)` closes all Hector-managed levels at once.
 
 ---
 
@@ -187,11 +252,16 @@ Use the `ConnectionSet` class to register and retrieve multiple named `Connectio
 
 ### ConnectionSet API
 
-| Method                                  | Description                                      |
-|-----------------------------------------|--------------------------------------------------|
-| `addConnection(Connection)`             | Register a `Connection` instance                 |
-| `hasConnection(string)`                 | Check if a connection with the given name exists |
-| `getConnection(string $name = DEFAULT)` | Retrieve a named connection or the default one   |
+| Method                                  | Description                                                       |
+|-----------------------------------------|-------------------------------------------------------------------|
+| `addConnection(Connection)`             | Register a `Connection` instance                                  |
+| `hasConnection(string)`                 | Check if a connection with the given name exists                  |
+| `getConnection(string $name = DEFAULT)` | Retrieve a named connection or the default one                    |
+| `transaction(callable $work)`           | Run the callback in a transaction on every connection (since 1.6) |
+| `rollBack(?bool $allTransactions = null)` | Forward the rollback scope to every connection |
+
+> ⚠️ **Warning**: `ConnectionSet::transaction()` is not a distributed transaction. Connections are committed one after
+> the other: if a commit fails, the connections already committed are not rolled back.
 
 ### Usage example
 
