@@ -144,6 +144,7 @@ You're now ready to build with **Hector ORM**. Here is a guide to the documentat
 * [Relationships](orm/relationships.md) — HasOne, HasMany, BelongsTo, ManyToMany
 * [Builder](orm/builder.md) — Query, filter and paginate entities
 * [Events](orm/events.md) — Hook into the entity lifecycle (save, delete)
+* [Optimistic locking](orm/optimistic-locking.md) — Detect concurrent modifications with a version column
 * [Advanced configuration](orm/configuration.md) — Table mapping, column types, hidden fields
 * [Cache](orm/cache.md) — Schema caching for production
 
