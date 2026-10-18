@@ -278,6 +278,14 @@ $user->firstname = 'Modified';
 $user->refresh(); // Reloads original data from DB
 ```
 
+### Detecting concurrent modifications
+
+> 🆕 **Info**: *Since version 1.7*
+
+To prevent two users from silently overwriting each other's changes, declare an integer version column with
+`#[Orm\Version('version')]`. Updates and deletions are then conditioned on the loaded version and fail with an
+`OptimisticLockException` on conflict. See [Optimistic locking](optimistic-locking.md).
+
 ### Generated columns
 
 > 🆕 **Info**: *Since version 1.5*

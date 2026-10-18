@@ -172,6 +172,25 @@ class OrderLine extends MagicEntity {}
 
 ---
 
+## Enable optimistic locking
+
+> 🆕 **Info**: *Since version 1.7*
+
+Use the `Hector\Orm\Attributes\Version` attribute on the class to declare an integer version column managed by the
+ORM. Updates and deletions are conditioned on the loaded version and increment it.
+
+```php
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\Version('version')]
+class Article extends MagicEntity {}
+```
+
+See [Optimistic locking](optimistic-locking.md).
+
+---
+
 ## Set custom table and schema names
 
 By default, the entity class name is used as the table name. If your database table name differs from the entity class
