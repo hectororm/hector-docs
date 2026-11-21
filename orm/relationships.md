@@ -36,6 +36,7 @@ and support named parameters.
 | `MorphMany`     | Defines the children of a polymorphic relationship (available since v1.7.0) |
 | `MorphOne`      | Defines the single child of a polymorphic relationship (available since v1.7.0) |
 | `MorphTo`       | References one of several parent types through a discriminator (available since v1.7.0) |
+| `MorphToMany`   | Defines a many-to-many link via a pivot shared between several types (available since v1.7.0) |
 
 ### Parameters
 
@@ -47,7 +48,7 @@ and support named parameters.
 | `pivotTable`  | string        | No       | Name of the pivot table (for `BelongsToMany` only)            |
 | `columnsFrom` | array         | No       | Mapping of source → pivot table columns (for `BelongsToMany`) |
 | `columnsTo`   | array         | No       | Mapping of pivot → target table columns (for `BelongsToMany`) |
-| `discriminator` | array       | Yes      | Column → value naming the parent type (polymorphic relationships only, where `columns` is required too) |
+| `discriminator` | array       | Yes      | Column → value naming the type (polymorphic relationships only, where columns are required too) |
 
 ### Additional parameters
 
@@ -423,7 +424,77 @@ $comments = Comment::query()->with(['commentable' => ['author']])->all();
 > - `MorphTo` does not accept `where`, `orderBy`, `groupBy`, `having` or `limit`.
 > - A condition through a relationship with several parent types (`where('commentable.title', ...)`) is rejected: the
 >   table to join depends on each row. Use a relationship with its own name instead (`where('article.title', ...)`).
-> - `BelongsTo` and `InverseOf` cannot invert a polymorphic relationship: declare both sides explicitly.
+> - `BelongsTo` and `InverseOf` cannot invert `MorphMany`, `MorphOne` or `MorphTo`: declare both sides explicitly.
+
+### Many-to-many: MorphToMany
+
+> Introduced by [issue #200](https://github.com/hectororm/hectororm/issues/200).
+
+A polymorphic many-to-many relationship goes through a pivot table shared between several types, whose rows carry the
+discriminator:
+
+```text
+taggables: tag_id, taggable_type, taggable_id
+
+taggable_type = 'article' → articles.id = taggable_id
+taggable_type = 'video'   → videos.id   = taggable_id
+```
+
+`MorphToMany` declares both sides. The pivot table, its columns and the discriminator are always explicit:
+
+```php
+#[Orm\MorphToMany(
+    target: Tag::class,
+    name: 'tags',
+    pivotTable: 'taggables',
+    columnsFrom: ['id' => 'taggable_id'],
+    columnsTo: ['tag_id' => 'id'],
+    discriminator: ['taggable_type' => 'article'],
+)]
+class Article extends MagicEntity {}
+
+#[Orm\MorphToMany(
+    target: Article::class,
+    name: 'articles',
+    pivotTable: 'taggables',
+    columnsFrom: ['id' => 'tag_id'],
+    columnsTo: ['taggable_id' => 'id'],
+    discriminator: ['taggable_type' => 'article'],
+)]
+class Tag extends MagicEntity {}
+```
+
+Each relationship has a single target: on the `Tag` side, declare one relationship per type (`articles`, `videos`),
+each with its own discriminator value.
+
+The discriminator applies to the pivot table:
+
+- **Reading**: `$article->tags` only follows the pivot rows of type `article`, including when an article and a video
+  share the same identifier. Eager loading and [conditions through the relationship](builder.md#filtering-through-relationships)
+  apply it too.
+- **Writing**: attaching an entity inserts the pivot row with the discriminator. Detaching an entity, or updating
+  [additional pivot data](#pivot-data-many-to-many), only affects the pivot row of that type.
+
+```php
+$article->tags[] = $tag;
+$article->save();
+
+// taggables: tag_id = <tag id>, taggable_type = 'article', taggable_id = <article id>
+```
+
+The opposite side may be derived with [`InverseOf`](#structural-inversion-inverseof): the inverse uses the same pivot
+discriminator.
+
+```php
+#[Orm\InverseOf(target: Article::class, name: 'articles', foreignName: 'tags')]
+class Tag extends MagicEntity {}
+```
+
+`where`, `orderBy` and the other filtering parameters are accepted and apply to the target entity, as with
+`BelongsToMany`.
+
+> 💡 **Tip**: Include the discriminator in the unique key of the pivot table, e.g.
+> `UNIQUE (tag_id, taggable_type, taggable_id)`.
 
 ### Programmatic declaration
 
@@ -434,6 +505,15 @@ $relationships->morphOne(Image::class, 'image', ['id' => 'imageable_id'], ['imag
 // Call morphTo() once per parent type; the same name extends the same relationship
 $relationships->morphTo(Article::class, 'commentable', ['commentable_id' => 'id'], ['commentable_type' => 'article']);
 $relationships->morphTo(Video::class, 'commentable', ['commentable_id' => 'id'], ['commentable_type' => 'video']);
+
+$relationships->morphToMany(
+    Tag::class,
+    'tags',
+    'taggables',
+    ['id' => 'taggable_id'],
+    ['tag_id' => 'id'],
+    ['taggable_type' => 'article'],
+);
 ```
 
 ### Filtered relationships are not polymorphic relationships
