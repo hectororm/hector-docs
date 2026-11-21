@@ -9,6 +9,8 @@ keywords:
   - has-many
   - belongs-to
   - many-to-many
+  - polymorphic
+  - morph-to
   - eager-loading
 ---
 
@@ -31,6 +33,9 @@ and support named parameters.
 | `BelongsToMany` | Defines a many-to-many link via pivot    |
 | `BelongsTo`     | References a scalar parent by reusing an opposite mapping |
 | `InverseOf`     | Structurally reverses an explicitly named relationship (available since v1.5.0) |
+| `MorphMany`     | Defines the children of a polymorphic relationship (available since v1.7.0) |
+| `MorphOne`      | Defines the single child of a polymorphic relationship (available since v1.7.0) |
+| `MorphTo`       | References one of several parent types through a discriminator (available since v1.7.0) |
 
 ### Parameters
 
@@ -42,6 +47,7 @@ and support named parameters.
 | `pivotTable`  | string        | No       | Name of the pivot table (for `BelongsToMany` only)            |
 | `columnsFrom` | array         | No       | Mapping of source → pivot table columns (for `BelongsToMany`) |
 | `columnsTo`   | array         | No       | Mapping of pivot → target table columns (for `BelongsToMany`) |
+| `discriminator` | array       | Yes      | Column → value naming the parent type (polymorphic relationships only, where `columns` is required too) |
 
 ### Additional parameters
 
@@ -277,60 +283,168 @@ class User extends MagicEntity {}
 
 ## Polymorphic relationships
 
-Polymorphic relations allow one entity to reference several types of targets. These are
-defined by using multiple relationship attributes with different names, filtered by a discriminator column.
+> **Available since v1.7.0:** Introduced by [issue #196](https://github.com/hectororm/hectororm/issues/196) and
+> [issue #197](https://github.com/hectororm/hectororm/issues/197).
 
-### Example
+A polymorphic relationship lets one table reference rows of several other tables through two columns: a key, and a
+*discriminator* naming the type of the referenced row.
 
-A Comment can be linked to either Articles or Videos:
+```text
+comments.commentable_type = 'article' → articles.id = comments.commentable_id
+comments.commentable_type = 'video'   → videos.id   = comments.commentable_id
+```
+
+No foreign key can describe such a reference, so `columns` and `discriminator` are always declared explicitly. The
+discriminator stores a value you choose (`'article'`), never a class name: renaming a class does not touch your data.
+
+### Parent side: MorphMany and MorphOne
 
 ```php
-#[HasMany(
+use Hector\Orm\Attributes as Orm;
+use Hector\Orm\Entity\MagicEntity;
+
+#[Orm\MorphMany(
     target: Comment::class,
     name: 'comments',
     columns: ['id' => 'commentable_id'],
-    where: ['commentable_type' => 'article']
+    discriminator: ['commentable_type' => 'article'],
 )]
 class Article extends MagicEntity {}
 
-#[HasMany(
+#[Orm\MorphMany(
     target: Comment::class,
     name: 'comments',
     columns: ['id' => 'commentable_id'],
-    where: ['commentable_type' => 'video']
+    discriminator: ['commentable_type' => 'video'],
 )]
 class Video extends MagicEntity {}
+```
 
-#[BelongsTo(
+`MorphOne` takes the same parameters and returns a single child or `null`, like [`HasOneChild`](#single-child-hasonechild).
+
+The discriminator is part of the relationship, not a read filter:
+
+- **Reading**: `$article->comments` only returns comments whose type is `article`, including when an article and a video
+  share the same identifier. Eager loading and [conditions through the relationship](builder.md#filtering-through-relationships)
+  apply it too.
+- **Writing**: a child added to the relationship receives the parent key **and** the discriminator.
+
+```php
+$comment = new Comment();
+$comment->body = 'Nice article!';
+
+$article->comments[] = $comment;
+$article->save();
+
+// comments.commentable_type = 'article', comments.commentable_id = <article id>
+```
+
+Both attributes default to `orphanRemoval: false`: removing a child clears its key and keeps its discriminator. Use
+`orphanRemoval: true` to delete removed children, which is required when the key column is not nullable. See
+[Relationship lifecycle](relationship-lifecycle.md).
+
+### Child side: MorphTo
+
+`MorphTo` is repeatable: declare one line per parent type. Lines sharing the same `name` form one relationship resolving
+to the parent named by the discriminator of the row.
+
+```php
+#[Orm\MorphTo(
+    target: Article::class,
+    name: 'commentable',
+    columns: ['commentable_id' => 'id'],
+    discriminator: ['commentable_type' => 'article'],
+)]
+#[Orm\MorphTo(
+    target: Video::class,
+    name: 'commentable',
+    columns: ['commentable_id' => 'id'],
+    discriminator: ['commentable_type' => 'video'],
+)]
+class Comment extends MagicEntity {}
+
+$comment->commentable; // Article, Video or null
+```
+
+A line with its own `name` is a relationship limited to one parent type:
+
+```php
+#[Orm\MorphTo(
     target: Article::class,
     name: 'article',
     columns: ['commentable_id' => 'id'],
-    where: ['commentable_type' => 'article']
+    discriminator: ['commentable_type' => 'article'],
 )]
-#[BelongsTo(
+#[Orm\MorphTo(
     target: Video::class,
     name: 'video',
     columns: ['commentable_id' => 'id'],
-    where: ['commentable_type' => 'video']
+    discriminator: ['commentable_type' => 'video'],
 )]
-class Comment extends MagicEntity {
-    public int $commentable_id;
-    public string $commentable_type; // 'article' or 'video'
-}
+class Comment extends MagicEntity {}
+
+$comment->article; // Article, or null when the comment belongs to a video
+$comment->video;   // Video, or null when the comment belongs to an article
 ```
 
-Accessing the related entity:
+Both forms may be declared on the same entity.
+
+| Operation | Behavior |
+| --- | --- |
+| Reading | Resolves to `null` when the discriminator names no parent type of the relationship, or when no row matches the key. A parent is never matched by key alone. |
+| Assigning an entity | Writes the key and the discriminator on save. A new parent is saved first. |
+| Assigning `null` | Clears the key and keeps the discriminator. Ignored when the row belongs to a parent type outside the relationship. |
+| Saving without assignment | A value that was only read is never written back: a reference to a deleted parent survives a save. |
+| Eager loading | One query per parent type present in the result. |
 
 ```php
-$comment = Comment::find(1);
+$comment->commentable = $video;
+$comment->save();
 
-// Access based on type
-if ($comment->commentable_type === 'article') {
-    $target = $comment->article;
-} else {
-    $target = $comment->video;
-}
+// comments.commentable_type = 'video', comments.commentable_id = <video id>
 ```
+
+Relationships sharing the same columns stay consistent: assigning one drops the cached value of the others, and the
+last assignment wins. Until the entity is saved, the others are read again from the columns of the entity, which still
+hold their previous values.
+
+Nested eager loading works on a result mixing several classes. A nested relationship missing on some of them is skipped
+for these classes; it must exist on at least one.
+
+```php
+$comments = Comment::query()->with(['commentable' => ['author']])->all();
+```
+
+> ⚠️ **Constraints**
+>
+> - Lines sharing a `name` must use the same source columns and the same discriminator column, each parent type once,
+>   each with its own discriminator value. Target columns may differ between parent types.
+> - `MorphTo` cannot share its `name` with another kind of relationship.
+> - `MorphTo` does not accept `where`, `orderBy`, `groupBy`, `having` or `limit`.
+> - A condition through a relationship with several parent types (`where('commentable.title', ...)`) is rejected: the
+>   table to join depends on each row. Use a relationship with its own name instead (`where('article.title', ...)`).
+> - `BelongsTo` and `InverseOf` cannot invert a polymorphic relationship: declare both sides explicitly.
+
+### Programmatic declaration
+
+```php
+$relationships->morphMany(Comment::class, 'comments', ['id' => 'commentable_id'], ['commentable_type' => 'article']);
+$relationships->morphOne(Image::class, 'image', ['id' => 'imageable_id'], ['imageable_type' => 'article']);
+
+// Call morphTo() once per parent type; the same name extends the same relationship
+$relationships->morphTo(Article::class, 'commentable', ['commentable_id' => 'id'], ['commentable_type' => 'article']);
+$relationships->morphTo(Video::class, 'commentable', ['commentable_id' => 'id'], ['commentable_type' => 'video']);
+```
+
+### Filtered relationships are not polymorphic relationships
+
+Before v1.7.0, this guide suggested emulating polymorphism with regular relationships filtered by
+`where: ['commentable_type' => '...']`. A `where` is only a read filter on the **target** table, so this approach is
+discouraged:
+
+- a child added to a filtered `HasMany` does not receive the discriminator;
+- a condition through the relationship joins without the filter;
+- on the child side, the filter applies to the parent table, which has no discriminator column.
 
 ---
 
@@ -786,5 +900,5 @@ $freshPosts = $user->posts; // Reloads from DB
   relationship attribute
 * Use `with()` to improve performance via eager loading
 * Prefer `getBuilder()` for dynamic queries
-* For polymorphic relationships, rely on multiple relation declarations with shared `name`, and control resolution using
-  application logic (e.g., a `target_type` discriminator)
+* For polymorphic relationships, declare `MorphMany` / `MorphOne` on the parents and `MorphTo` on the child, with an
+  explicit `discriminator`; do not emulate them with a `where` filter
