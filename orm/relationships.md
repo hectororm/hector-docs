@@ -476,6 +476,8 @@ The discriminator applies to the pivot table:
   apply it too.
 - **Writing**: attaching an entity inserts the pivot row with the discriminator. Detaching an entity, or updating
   [additional pivot data](#pivot-data-many-to-many), only affects the pivot row of that type.
+- **Additional pivot data** cannot override the discriminator: an entry named after a discriminator column is ignored
+  on save, so an entity loaded through `$video->tags` can be attached to an article without carrying its type over.
 
 ```php
 $article->tags[] = $tag;
