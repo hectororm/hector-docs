@@ -177,7 +177,7 @@ class OrderLine extends MagicEntity {}
 > 🆕 **Info**: *Since version 1.7*
 
 Use the `Hector\Orm\Attributes\Version` attribute on the class to declare an integer version column managed by the
-ORM. Updates and deletions are conditioned on the loaded version and increment it.
+ORM. Updates and deletions are conditioned on the loaded version, and updates increment it.
 
 ```php
 use Hector\Orm\Attributes as Orm;

@@ -143,11 +143,12 @@ try {
 `Orm::persist()`.
 
 On an update or deletion conflict, the in-memory state of the entity is left untouched: its pending changes and its
-version are kept. To retry, reload the entity with `refresh()`, reapply the changes and save again.
+version are kept. Without an [expected version](#validating-a-version-from-a-previous-request), reload the entity with
+`refresh()`, reapply the changes and save again: the next write is conditioned on the reloaded version.
 
 On a save without change, the version is checked by the refresh that follows the save: when the conflict is reported,
-the entity has already been refreshed, and its related entities may have been linked. Within a
-[relationship lifecycle](relationship-lifecycle.md) operation, everything is rolled back and restored.
+the entity has already been refreshed, unless its row was deleted, and its related entities may have been linked.
+Within a [relationship lifecycle](relationship-lifecycle.md) operation, everything is rolled back and restored.
 
 ---
 
@@ -177,6 +178,26 @@ $article->save();
 - is released after the next successful write or deletion;
 - throws an `OrmException` if the entity is not versioned, or a `MapperException` if its version is not loaded (e.g. a
   new entity).
+
+### Resolving a conflict with an expected version
+
+Since the expected version survives `refresh()`, reloading the entity is not enough to retry: the next save is still
+conditioned on the stale client version and conflicts again. This is intended, so that a stale edit is never accepted
+silently.
+
+Once the conflict has been consciously resolved, for example after the user has reviewed the latest data and
+confirmed the merged values, adopt the reloaded version explicitly:
+
+```php
+$article->refresh();                           // Latest data and version
+// ... show the conflict, let the user merge and confirm ...
+$article->expectVersion($article->version);    // Adopt the reviewed version
+$article->title = $mergedTitle;
+$article->save();                              // Conditioned on the reviewed version
+```
+
+Alternatively, send the reviewed version back to the client and validate it on the next request, as above. Do not
+replace the client expectation automatically when retrying: it would silently discard the conflict.
 
 ---
 
