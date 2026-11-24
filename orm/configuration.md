@@ -21,20 +21,26 @@ to your entity classes to control relationships, column visibility, table mappin
 
 When initializing the ORM via `OrmFactory::orm()`, you can pass the following options:
 
-| Option     | Type     | Required | Description                                             |
-|------------|----------|----------|---------------------------------------------------------|
-| `schemas`  | `array`  | Yes      | List of database schema names to introspect             |
-| `aliases`  | `array`  | No       | Map of schema names to aliases (e.g., for multi-tenant) |
-| `dsn`      | `string` | No*      | DSN string (required if no connection provided)         |
-| `username` | `string` | No       | Database username                                       |
-| `password` | `string` | No       | Database password                                       |
-| `read_dsn` | `string` | No       | DSN for read-only replica                               |
-| `name`     | `string` | No       | Connection name (default: `'default'`)                  |
-| `log`      | `bool`   | No       | Enable query logging (default: `false`)                 |
-| `options`  | `array`  | No       | Driver-specific PDO options (since 1.5)                 |
+| Option            | Type                   | Required | Description                                                 |
+|-------------------|------------------------|----------|-------------------------------------------------------------|
+| `schemas`         | `array`                | Yes      | List of database schema names to introspect                 |
+| `aliases`         | `array`                | No       | Map of schema names to aliases (e.g., for multi-tenant)     |
+| `dsn`             | `string`               | No*      | DSN string (required if no connection provided)             |
+| `username`        | `string`               | No       | Database username                                           |
+| `password`        | `string`               | No       | Database password                                           |
+| `read_dsn`        | `string`               | No       | DSN for read-only replica                                   |
+| `name`            | `string`               | No       | Connection name (default: `'default'`)                      |
+| `log`             | `bool`                 | No       | Enable query logging (default: `false`)                     |
+| `options`         | `array`                | No       | Driver-specific PDO options (since 1.5)                     |
+| `datetime_format` | `string`               | No       | Format of the bound date/time values (since 1.7)            |
+| `timezone`        | `string\|DateTimeZone` | No       | Database storage timezone, name or object (since 1.7)       |
 
 > 🆕 **Info**: *Since version 1.5* — `options` is forwarded to the created `Connection` as its PDO options. See
 > [PDO options](../components/connection.md#pdo-options).
+
+> 🆕 **Info**: *Since version 1.7* — `datetime_format` and `timezone` are forwarded to the created `Connection` to
+> convert the date/time values bound to queries. An invalid timezone name throws an `OrmException`. See
+> [Date/time parameters](../components/connection.md#datetime-parameters).
 
 **Example with all options:**
 
@@ -50,6 +56,8 @@ $orm = OrmFactory::orm(
         'name' => 'default',
         'log' => true,
         'options' => [PDO::ATTR_TIMEOUT => 5],
+        'datetime_format' => 'Y-m-d H:i:s',
+        'timezone' => 'UTC',
         'schemas' => ['myapp'],
         'aliases' => [
             'myapp' => 'app', // Use 'app' as alias for 'myapp' schema

@@ -193,6 +193,16 @@ You can filter entities using a fluent API similar to the `QueryBuilder`.
 MyEntity::query()->where('column', 'value')->orWhere('column', '<', 10);
 ```
 
+> 🆕 **Info**: *Since version 1.7*
+>
+> `DateTimeInterface` objects can be used as condition values:
+> `MyEntity::query()->where('created_at', '<', new DateTimeImmutable('-1 day'))`.
+>
+> They are converted with the date/time format and storage timezone of the **connection**, not with the type of the
+> column: see [Date/time parameters](../components/connection.md#datetime-parameters). Keep the connection timezone
+> and the [`DateTimeType`](../components/data-types.md#datetimetype) timezone identical, and format the value yourself
+> for a column with another format (e.g. `DATE`).
+
 ### Where In / Not In
 
 ```php

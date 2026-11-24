@@ -33,15 +33,19 @@ credentials, define a connection name, set up a read-only replica, or inject a l
 
 ### Constructor parameters
 
-| Parameter  | Type     | Default     | Description                                          |
-|------------|----------|-------------|------------------------------------------------------|
-| `dsn`      | `string` | —           | DSN string for write operations (required)           |
-| `username` | `string` | `null`      | Optional database username                           |
-| `password` | `string` | `null`      | Optional database password                           |
-| `readDsn`  | `string` | `null`      | Optional DSN string for read operations              |
-| `name`     | `string` | `'default'` | Optional connection name                             |
-| `logger`   | `Logger` | `null`      | Optional logger instance to capture executed queries |
-| `options`  | `array`  | `[]`        | Driver-specific PDO options (since 1.5)              |
+| Parameter        | Type           | Default         | Description                                          |
+|------------------|----------------|-----------------|------------------------------------------------------|
+| `dsn`            | `string`       | —               | DSN string for write operations (required)           |
+| `username`       | `string`       | `null`          | Optional database username                           |
+| `password`       | `string`       | `null`          | Optional database password                           |
+| `readDsn`        | `string`       | `null`          | Optional DSN string for read operations              |
+| `name`           | `string`       | `'default'`     | Optional connection name                             |
+| `logger`         | `Logger`       | `null`          | Optional logger instance to capture executed queries |
+| `options`        | `array`        | `[]`            | Driver-specific PDO options (since 1.5)              |
+| `dateTimeFormat` | `string`       | `'Y-m-d H:i:s'` | Format of the bound date/time values (since 1.7)     |
+| `timezone`       | `DateTimeZone` | `null`          | Storage timezone of the database (since 1.7)         |
+
+`dateTimeFormat` and `timezone` are described in [Date/time parameters](#datetime-parameters).
 
 ### Simple connection
 
@@ -138,6 +142,58 @@ foreach ($connection->fetchColumn('SELECT email FROM users') as $email) {
     // Process each email address
 }
 ```
+
+### Date/time parameters
+
+> 🆕 **Info**: *Since version 1.7*
+
+`DateTimeInterface` objects can be passed as parameters. When the query is executed, the connection converts them to
+the **storage timezone** of the database, then formats them:
+
+```php
+$connection = new Connection(
+    dsn: 'mysql:host=localhost;dbname=mydb',
+    timezone: new DateTimeZone('UTC'),
+);
+
+$connection->execute(
+    'INSERT INTO events (starts_at) VALUES (?)',
+    [new DateTimeImmutable('2026-01-02 03:04:05+09:00')]
+);
+// Binds '2026-01-01 18:04:05'
+
+$events = $connection->fetchAll(
+    'SELECT * FROM events WHERE starts_at < :date',
+    ['date' => new DateTimeImmutable()]
+);
+```
+
+| Parameter        | Default         | Description                                                             |
+|------------------|-----------------|-------------------------------------------------------------------------|
+| `dateTimeFormat` | `'Y-m-d H:i:s'` | Format of the bound value, e.g. `'Y-m-d H:i:s.u'` for `DATETIME(6)`     |
+| `timezone`       | `null`          | Storage timezone of the database; `null` means the PHP default timezone |
+
+Both values are available on `Connection::fromPdo()` too, can be read with `getDateTimeFormat()` and `getTimezone()`,
+and are preserved when the connection is serialized.
+
+The same conversion applies to every value bound through the connection, including the values given to the
+[Query builder](query.md) and to the conditions of the [ORM builder](../orm/builder.md). Strings are bound as is.
+
+> 💡 **Tip**: Use the same timezone as the [`DateTimeType`](data-types.md#datetimetype) of your entities, which also
+> falls back to the PHP default timezone. Raw statements, the query builder and the entity mapping then read and write
+> dates in the same timezone.
+
+> ⚠️ **Warning**: Date objects implementing `Stringable` (e.g. Carbon, Chronos) were bound through `__toString()`
+> before 1.7, in their own timezone. They are now converted like any other `DateTimeInterface`: the bound value changes
+> if the object is not in the storage timezone, or if its string format is not the connection format.
+
+#### Limitations
+
+- **One format per connection**: the format does not depend on the column. Format the value yourself for `DATE` or
+  `TIME` columns on engines that compare dates as text (SQLite).
+- **Microseconds**: the default format drops them.
+- **Session timezone**: the timezone of the database session is not changed. `NOW()`, `CURRENT_TIMESTAMP` and
+  MySQL/MariaDB `TIMESTAMP` columns still follow it.
 
 ### Last insert ID
 
@@ -441,6 +497,8 @@ foreach ($logger->getLogs() as $log) {
     echo $log->getDuration() . "ms\n";
 }
 ```
+
+Since 1.7, [date/time parameters](#datetime-parameters) are logged as the converted value sent to the database.
 
 ---
 

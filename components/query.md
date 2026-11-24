@@ -121,6 +121,19 @@ $queryBuilder
     ->orWhere('field', '>=', 10);
 ```
 
+> 🆕 **Info**: *Since version 1.7*
+>
+> `DateTimeInterface` objects are accepted wherever a value is bound: conditions, `BETWEEN`, `IN` lists and
+> assigned values. The connection converts them to its date/time format and storage timezone when the query runs.
+> See [Date/time parameters](connection.md#datetime-parameters).
+>
+> ```php
+> $queryBuilder
+>     ->from('events')
+>     ->where('starts_at', '>=', new DateTimeImmutable('today'))
+>     ->whereBetween('created_at', $from, $to);
+> ```
+
 ### Grouped conditions
 
 You can pass a `Closure` to `where()` or `having()` to create grouped conditions wrapped in parentheses. The closure
