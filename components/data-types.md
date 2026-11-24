@@ -103,6 +103,11 @@ Converts formatted date/time strings to `DateTimeInterface` instances and back.
 > // '2025-07-04 09:00:00'
 > ```
 
+> 💡 **Tip**: Since version 1.7, the connection has its own `timezone` and `dateTimeFormat`, used for the dates bound
+> to raw statements and query builders. They are independent of `DateTimeType`: configure the same timezone on both,
+> so that queries compare dates in the timezone the entities are stored in. See
+> [Date/time parameters](connection.md#datetime-parameters).
+
 #### Conversion
 
 | Database value          | PHP value                                  |
