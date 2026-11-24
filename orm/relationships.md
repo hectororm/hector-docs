@@ -296,6 +296,8 @@ comments.commentable_type = 'video'   → videos.id   = comments.commentable_id
 
 No foreign key can describe such a reference, so `columns` and `discriminator` are always declared explicitly. The
 discriminator stores a value you choose (`'article'`), never a class name: renaming a class does not touch your data.
+The value must be a string or an integer; other types, such as booleans and floats, are rejected when the relationship is
+declared.
 
 ### Parent side: MorphMany and MorphOne
 
