@@ -8,6 +8,7 @@ keywords:
   - select
   - insert
   - update
+  - upsert
   - delete
   - where
   - join
@@ -52,6 +53,7 @@ enabling you to manually build the query and bind parameters.
 * `Hector\Query\Select`
 * `Hector\Query\Insert`
 * `Hector\Query\Update`
+* `Hector\Query\Upsert` (since 1.7)
 * `Hector\Query\Delete`
 * `Hector\Query\Union`
 
@@ -654,6 +656,121 @@ $queryBuilder
 ```
 
 These shortcut methods do not affect the `QueryBuilder` instance, so it remains reusable for further operations.
+
+### Upsert
+
+> 🆕 **Info**: *Since version 1.7*
+
+Use `upsert()` to insert rows and update the ones that already exist, in a single atomic statement. This is the usual
+need of imports and synchronization tasks, without a preliminary existence check:
+
+```php
+$affected = $queryBuilder
+    ->from('users')
+    ->upsert(
+        [
+            ['external_id' => 'A', 'name' => 'First', 'source' => 'import'],
+            ['external_id' => 'B', 'name' => 'Second', 'source' => 'import'],
+        ],
+        uniqueBy: ['external_id'],
+        update: ['name'],
+    );
+```
+
+Existing rows get their `name` updated and keep their `source`; missing rows are inserted with all three columns.
+
+| Parameter   | Description                                                                                           |
+|-------------|-------------------------------------------------------------------------------------------------------|
+| `$rows`     | Rows of values indexed by column name. A single row is accepted as well.                              |
+| `$uniqueBy` | Columns identifying a conflict. Composite keys are supported.                                         |
+| `$update`   | Columns to update on conflict. Omitted or `null`: every inserted column except the `$uniqueBy` ones.  |
+
+With an empty `$update` list (or when the rows only hold the `$uniqueBy` columns), missing rows are inserted and
+existing rows are left untouched.
+
+All values are bound as parameters, and column names are quoted with the driver's identifier quote. A
+`StatementInterface` value (e.g. `new Raw('CURRENT_TIMESTAMP')`) is rendered as is.
+
+The generated SQL depends on the driver and its version:
+
+| Driver                        | Generated SQL                                                                    |
+|-------------------------------|----------------------------------------------------------------------------------|
+| MySQL 8.0.19+                 | ``INSERT ... VALUES ... AS `hector_upsert` ON DUPLICATE KEY UPDATE `name` = `hector_upsert`.`name` `` |
+| MySQL before 8.0.19, MariaDB  | ``INSERT ... VALUES ... ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)``          |
+| PostgreSQL 9.5+, SQLite 3.24+ | `INSERT ... VALUES ... ON CONFLICT ( "external_id" ) DO UPDATE SET "name" = excluded."name"` |
+
+Any other driver or version (including Vitess) throws a `RuntimeException`: there is no fallback to a non-atomic
+"read then write" sequence.
+
+> ⚠️ **Warning**: The table must have a primary key or unique index on the `$uniqueBy` columns.
+>
+> * **PostgreSQL / SQLite** fail with an SQL error when no uniqueness constraint matches `$uniqueBy`.
+> * **MySQL / MariaDB do not honor `$uniqueBy`**: the conflict is detected on *any* primary key or unique index of
+>   the table. Without such an index, rows are silently inserted as duplicates; with several unique indexes, a row
+>   may be updated because of another one than the one you expect.
+
+#### Input rules
+
+* All rows must have the same columns; their order may differ from one row to another. A row with a missing or an
+  additional column throws an `InvalidArgumentException`: values are never completed with `NULL`.
+* `$uniqueBy` must not be empty, and the `$uniqueBy` and `$update` columns must be part of the rows.
+* `$update` is a list of column names. Custom values on update (`'column' => $value`, `Increment`, ...) are not
+  supported.
+* Column names are quoted as a single identifier: do not qualify them with the table name.
+* With no rows, `upsert()` returns `0` without running any query.
+
+#### Affected rows
+
+The returned count is the one reported by the driver. It does not tell inserted and updated rows apart in a portable
+way:
+
+| Driver              | Inserted row | Updated row | Existing row already holding the same values |
+|---------------------|--------------|-------------|----------------------------------------------|
+| MySQL / MariaDB     | 1            | 2           | 0                                            |
+| PostgreSQL / SQLite | 1            | 1           | 1                                            |
+
+With an empty `$update` list, only the inserted rows are counted, on every driver.
+
+#### Upsert, `ignore()` or application-level logic?
+
+| Approach                              | Existing rows  | Statements          | Concurrency                                |
+|---------------------------------------|----------------|---------------------|--------------------------------------------|
+| `upsert()`                            | Updated        | One, multi-row      | Atomic, handled by the database            |
+| `ignore()->insert()`                  | Left untouched | One, single row     | Atomic, handled by the database            |
+| `fetchOne()` then insert or update    | Updated        | Two or more per row | Needs a transaction and a lock, or a retry |
+
+Prefer `upsert()` when existing rows must be updated. `ignore()` cannot update them, and on MySQL/MariaDB
+`INSERT IGNORE` also turns other errors (such as invalid values) into warnings. Keep application-level logic for
+what a single statement cannot express, such as a decision depending on the current row or entity lifecycle events.
+
+> ⚠️ **Warning**: This is a query-level operation. No entity is hydrated or refreshed, no per-entity lifecycle event
+> is triggered, and values are sent as given, without ORM type conversion.
+
+> 💡 **Tip**: Things to keep in mind:
+>
+> * **Batch size**: rows are sent in a single statement, and engines limit the number of bound parameters and the
+>   size of a statement. Split large imports yourself, e.g. with `array_chunk()`.
+> * **Duplicate keys in the same call**: PostgreSQL rejects a statement holding two rows with the same `$uniqueBy`
+>   values. Deduplicate the rows first rather than relying on the behavior of the other engines.
+> * **Last insert ID**: its value after an upsert is not portable. Read the rows back when you need their keys.
+
+The same query can be built without a `QueryBuilder`, with the `Upsert` statement:
+
+```php
+use Hector\Connection\Bind\BindParamList;
+use Hector\Query\Upsert;
+
+$upsert = (new Upsert())
+    ->from('users')
+    ->rows([['external_id' => 'A', 'name' => 'First']])
+    ->uniqueBy(['external_id'])
+    ->update(['name']);
+
+$binds = new BindParamList();
+$sql = $upsert->getStatement($binds, $connection->getDriverInfo());
+```
+
+Without `DriverInfo`, the statement uses the MySQL `VALUES()` form.
 
 ### Atomic increment / decrement
 

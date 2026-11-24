@@ -489,5 +489,8 @@ This includes [atomic increment / decrement](../components/query.md#atomic-incre
 (`update(['stock' => new Decrement(1)])`). They run as a single query: loaded entities are not refreshed and no entity
 lifecycle event is triggered.
 
+Since **1.7**, the same applies to [`upsert()`](../components/query.md#upsert): rows are plain column values sent as
+given, without ORM type conversion, and no entity is hydrated.
+
 If you need full SQL flexibility or want to decouple from ORM, refer to the
 standalone [QueryBuilder documentation](../components/query.md).
