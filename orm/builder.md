@@ -491,3 +491,6 @@ lifecycle event is triggered.
 
 If you need full SQL flexibility or want to decouple from ORM, refer to the
 standalone [QueryBuilder documentation](../components/query.md).
+
+> ⚠️ **Warning**: Bulk `update()` and `delete()` executed through the builder bypass entities: they do not trigger
+> events and do not check or increment the version of [optimistically locked](optimistic-locking.md) entities.
