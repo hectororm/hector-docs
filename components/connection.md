@@ -478,6 +478,8 @@ $capabilities->hasJson();        // true
 | `hasStrictMode(): bool`      | Whether strict SQL mode is enforced         |
 | `hasCheckConstraints(): bool` | Whether the engine/version enforces CHECK constraints (since 1.5) |
 | `hasDropCheck(): bool` | Whether native `ALTER TABLE ... DROP CHECK` syntax is supported (since 1.5) |
+| `hasUpsert(): bool` | Whether a native, atomic upsert is supported (since 1.7) |
+| `hasInsertRowAlias(): bool` | Whether `INSERT ... VALUES (...) AS alias` is supported (since 1.7) |
 
 **Interface change:** third-party `DriverCapabilities` implementations must implement both CHECK methods.
 Return `false` when support cannot be established.
@@ -487,6 +489,14 @@ support and `false` for `DROP CHECK`: MariaDB/PostgreSQL use `DROP CONSTRAINT`, 
 Older MySQL/MariaDB versions, Vitess and unknown engines return `false` for both.
 These capabilities describe engine support, not session overrides. PostgreSQL has native support but no Hector
 schema-plan compiler. See [CHECK compilation](plan.md#check-constraints) for online/offline usage.
+
+Since **1.7**, `hasUpsert()` returns `true` on MySQL, MariaDB, SQLite **3.24.0+** and PostgreSQL **9.5+**, and
+`hasInsertRowAlias()` returns `true` on MySQL **8.0.19+** only, where the row alias replaces the deprecated `VALUES()`
+function of `ON DUPLICATE KEY UPDATE`. Vitess and unknown engines return `false` for both. They drive the
+[upsert](query.md#upsert) of the Query Builder.
+
+**Interface change:** third-party `DriverCapabilities` implementations must implement both methods. The interface
+describes the engines supported by Hector and can gain methods in minor releases.
 
 Since **1.5**, the concrete `Hector\Connection\Driver\SQLiteCapabilities` class also exposes
 `hasGeneratedColumns(): bool`, which returns `true` for SQLite **3.31.0 or newer**. This method is specific to SQLite
